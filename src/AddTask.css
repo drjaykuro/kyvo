@@ -1,0 +1,153 @@
+.add-task-screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.back-button {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.back-button:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.add-task-heading {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.add-task-subheading {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+
+.add-task-subheading .highlight {
+  color: var(--green);
+}
+
+.time-row {
+  display: flex;
+  gap: 12px;
+}
+
+.time-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.icon-choice {
+  background: var(--card);
+  border: 1.5px solid var(--card-border);
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.icon-choice.wide {
+  width: auto;
+  padding: 0 12px;
+  gap: 2px;
+}
+
+.icon-choice:hover {
+  border-color: var(--green);
+  color: var(--text);
+}
+
+.icon-choice.active {
+  border-color: var(--green);
+  background: rgba(16, 224, 138, 0.14);
+  color: var(--green);
+}
+
+.selection-caption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 6px 0 4px;
+  text-transform: capitalize;
+}
+
+.preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 10px 0 6px;
+}
+
+.preview-xp {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.preview-xp strong {
+  color: var(--green);
+}
+
+.subtask-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.subtask-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 5px 6px 5px 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.subtask-chip button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.subtask-chip button:hover {
+  color: #f87171;
+}

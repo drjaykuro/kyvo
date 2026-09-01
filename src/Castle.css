@@ -1,0 +1,47 @@
+.period-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+}
+
+.period-tab {
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1.5px solid var(--card-border);
+  border-radius: 20px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.period-tab:hover {
+  border-color: var(--green);
+  color: var(--text);
+}
+
+.period-tab.active {
+  border-color: var(--green);
+  background: rgba(16, 224, 138, 0.14);
+  color: var(--green);
+}
+
+.castle-wall {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 5px;
+  padding: 20px 8px;
+  margin-bottom: 8px;
+  background: radial-gradient(circle at 50% 100%, rgba(16, 224, 138, 0.06), transparent 70%);
+  border-radius: 14px;
+  min-height: 120px;
+  align-content: flex-start;
+}
+
+.castle-brick {
+  height: 22px;
+  border-radius: 4px;
+}

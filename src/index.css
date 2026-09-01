@@ -1,0 +1,122 @@
+:root {
+  --bg: #0a0e1a;
+  --card: #12172a;
+  --card-border: #232a42;
+  --green: #10e08a;
+  --green-dark: #0dc67b;
+  --text: #e8ebf5;
+  --text-dim: #8891a8;
+
+  --size-small: #22c55e;
+  --size-medium: #3b82f6;
+  --size-large: #a855f7;
+  --size-giant: #f97316;
+
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Shared diagonal light-sweep animation — a bright glint that slides across
+   any element carrying this class, giving it a polished, catching-the-light
+   feel. animation-delay can be staggered per-element via --shine-delay. */
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 35%;
+  height: 200%;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%);
+  transform: rotate(20deg);
+  animation: shineSweep 3.2s ease-in-out infinite;
+  animation-delay: var(--shine-delay, 0s);
+  pointer-events: none;
+}
+
+@keyframes shineSweep {
+  0%   { left: -60%; }
+  30%  { left: 130%; }
+  100% { left: 130%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shine::after {
+    animation: none;
+    display: none;
+  }
+}
+
+/* Reusable "physical block" treatment — a beveled, gradient-lit, glowing,
+   shadowed surface used anywhere a block/brick/pill needs to feel tactile
+   and radiant instead of flat. Set --block-color to tint it. This is the
+   app's core visual signature — reuse it everywhere blocks appear. */
+.block-3d {
+  --c: var(--block-color, var(--green));
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--c) 92%, white) 0%,
+    var(--c) 50%,
+    color-mix(in srgb, var(--c) 75%, black) 100%
+  );
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 6px 14px rgba(0, 0, 0, 0.4),
+    0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.block-3d::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 35%;
+  height: 200%;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%);
+  transform: rotate(20deg);
+  animation: shineSweep 3.2s ease-in-out infinite;
+  animation-delay: var(--shine-delay, 0s);
+  pointer-events: none;
+}
+
+.block-3d:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 10px 20px rgba(0, 0, 0, 0.45),
+    0 0 18px color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block-3d::after {
+    animation: none;
+    display: none;
+  }
+}
