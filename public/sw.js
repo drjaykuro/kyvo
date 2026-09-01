@@ -1,6 +1,6 @@
-const CACHE_NAME = 'kyvo-v1'
+const CACHE_NAME = 'kyvo-v2'
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   self.skipWaiting()
 })
 
@@ -22,6 +22,13 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request)
+      .catch(() => caches.match(event.request))
+      .then((response) => response || new Response('Offline', {
+        status: 503,
+        headers: {
+          'Content-Type': 'text/plain'
+        }
+      }))
   )
 })
