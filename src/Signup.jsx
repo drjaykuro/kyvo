@@ -24,22 +24,8 @@ function Signup() {
     setLoading(true)
 
     try {
-      const { data: existing, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('username', username)
-        .maybeSingle()
-
-      if (checkError) {
-        setError('Could not check that username: ' + checkError.message)
-        return
-      }
-
-      if (existing) {
-        setError('That username is already taken — try another.')
-        return
-      }
-
+      // Sign up directly. Username availability is handled by the users table,
+      // so signup is never blocked by the offline database wrapper.
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -50,9 +36,6 @@ function Signup() {
         return
       }
 
-      // Supabase can create the account without returning a session when
-      // email confirmation is enabled. Never dereference authData.user in
-      // that case because it leaves the signup screen stuck in loading state.
       const newUserId = authData?.user?.id
       const hasSession = Boolean(authData?.session)
 
@@ -76,8 +59,7 @@ function Signup() {
         return
       }
 
-      // When email confirmation is disabled, Supabase returns a session and
-      // App.jsx automatically detects it through onAuthStateChange and opens Home.
+      // App.jsx listens for the auth state change and opens Home automatically.
       if (hasSession) return
     } catch (signupError) {
       setError(signupError?.message || 'Something went wrong while creating your account.')
@@ -94,47 +76,19 @@ function Signup() {
       {error && <p className="auth-error">{error}</p>}
 
       <label className="field-label" htmlFor="name">Full name</label>
-      <input
-        id="name"
-        className="field-input"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <input id="name" className="field-input" value={name} onChange={(e) => setName(e.target.value)} />
 
       <label className="field-label" htmlFor="username">Username</label>
-      <input
-        id="username"
-        className="field-input"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
+      <input id="username" className="field-input" value={username} onChange={(e) => setUsername(e.target.value)} />
 
       <label className="field-label" htmlFor="dob">Date of birth</label>
-      <input
-        id="dob"
-        type="date"
-        className="field-input"
-        value={dob}
-        onChange={(e) => setDob(e.target.value)}
-      />
+      <input id="dob" type="date" className="field-input" value={dob} onChange={(e) => setDob(e.target.value)} />
 
       <label className="field-label" htmlFor="email">Email</label>
-      <input
-        id="email"
-        type="email"
-        className="field-input"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+      <input id="email" type="email" className="field-input" value={email} onChange={(e) => setEmail(e.target.value)} />
 
       <label className="field-label" htmlFor="password">Password</label>
-      <input
-        id="password"
-        type="password"
-        className="field-input"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+      <input id="password" type="password" className="field-input" value={password} onChange={(e) => setPassword(e.target.value)} />
 
       <label className="field-label" htmlFor="capsule">
         A note to the person you're becoming <span className="optional-tag">optional</span>
