@@ -178,6 +178,7 @@ async function syncQueue() {
 
   const queue = await getQueue()
   for (const item of queue) {
+    if (item.userId && item.userId !== session.user.id) continue
     try {
       let response
       if (item.action === 'delete') {
@@ -242,7 +243,8 @@ class OfflineQuery {
         || null
       const rows = await localSelect(this.table, userId, this.filters, this.ordering, this.limitValue, this.columns.includes('subtasks'))
       if (this.singleResult) {
-        if (rows.length !== 1) return { data: null, error: new Error(rows.length === 0 ? 'No rows found' : 'Multiple rows found') }
+        if (rows.length === 0) return { data: null, error: null }
+        if (rows.length !== 1) return { data: null, error: new Error('Multiple rows found') }
         return { data: rows[0], error: null }
       }
       return { data: rows, error: null }
@@ -307,6 +309,13 @@ class OfflineQuery {
       }
       const result = await query
       if (result.error) throw result.error
+
+      if (this.operation === 'update') {
+        const updatedRows = matched.map((row) => ({ ...row, ...this.payload }))
+        for (const row of updatedRows) await localMutation(this.table, 'update', row, userId || row.user_id)
+      } else {
+        for (const row of matched) await localMutation(this.table, 'delete', { id: row.id }, userId || row.user_id)
+      }
       if (result.data) await cache(this.table, Array.isArray(result.data) ? result.data : [result.data])
       return result
     } catch (error) {
