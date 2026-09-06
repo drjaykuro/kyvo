@@ -3,7 +3,7 @@ import {
   ArrowLeft, Heart, Briefcase, BookOpen, Dumbbell, ClipboardList, Utensils,
   MoreHorizontal, Flame, Ban, RotateCw, CalendarDays, X,
 } from 'lucide-react'
-import { offlineSupabase as supabase } from './offlineStore'
+import { supabase } from './supabaseClient'
 import { calculateBlockSize, SIZE_POINTS, DIFFICULTY_MULTIPLIER, CATEGORY_COLORS, todayStr } from './blocksLogic'
 import './AddTask.css'
 
