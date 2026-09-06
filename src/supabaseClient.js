@@ -214,6 +214,7 @@ class OfflineQuery {
   order(column, options = {}) { this.ordering.push({ column, ascending: options.ascending !== false }); return this }
   limit(value) { this.limitValue = value; return this }
   single() { this.singleResult = true; return this }
+  maybeSingle() { this.singleResult = true; return this }
   insert(payload) { this.operation = 'insert'; this.payload = payload; return this }
   update(payload) { this.operation = 'update'; this.payload = payload; return this }
   delete() { this.operation = 'delete'; return this }
@@ -229,7 +230,7 @@ class OfflineQuery {
           this.filters.forEach((filter) => { query = query.eq(filter.column, filter.value) })
           this.ordering.forEach((order) => { query = query.order(order.column, { ascending: order.ascending }) })
           if (this.limitValue != null) query = query.limit(this.limitValue)
-          if (this.singleResult) query = query.single()
+          if (this.singleResult) query = query.maybeSingle()
           const result = await query
           if (!result.error) await cache(this.table, Array.isArray(result.data) ? result.data : (result.data ? [result.data] : []))
           return result
