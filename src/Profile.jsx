@@ -215,6 +215,12 @@ function Profile({ userId }) {
         Log out
       </button>
 
+      <div style={{ textAlign: 'center', padding: '20px 0 8px', color: 'var(--text-dim)' }}>
+        <div style={{ fontSize: 11, letterSpacing: '0.04em' }}>KYVO</div>
+        <div style={{ fontSize: 11, marginTop: 4 }}>Built by J Gravity Labs</div>
+        <div style={{ fontSize: 10, marginTop: 3 }}>© 2026 J Gravity Labs</div>
+      </div>
+
       <div style={{ height: '80px' }} />
     </div>
   )
