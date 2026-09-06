@@ -128,6 +128,10 @@ function Profile({ userId }) {
     <div className="home-screen">
       <h1 className="home-greeting">Profile</h1>
 
+      <div style={{ marginTop: '-8px', marginBottom: '22px', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.04em' }}>
+        Built by J Gravity Labs
+      </div>
+
       {error && <p className="home-error">{error}</p>}
 
       <div className="profile-header">
@@ -216,8 +220,6 @@ function Profile({ userId }) {
       </button>
 
       <div style={{ textAlign: 'center', padding: '20px 0 8px', color: 'var(--text-dim)' }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.04em' }}>KYVO</div>
-        <div style={{ fontSize: 11, marginTop: 4 }}>Built by J Gravity Labs</div>
         <div style={{ fontSize: 10, marginTop: 3 }}>© 2026 J Gravity Labs</div>
       </div>
 
