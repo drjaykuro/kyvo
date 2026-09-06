@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kyvo-v3'
+const CACHE_NAME = 'kyvo-v4'
 
 const APP_SHELL = [
   '/',
@@ -30,6 +30,40 @@ self.addEventListener('activate', (event) => {
   )
 
   self.clients.claim()
+})
+
+self.addEventListener('push', (event) => {
+  let payload = {}
+
+  try {
+    payload = event.data ? event.data.json() : {}
+  } catch {
+    payload = { body: event.data?.text?.() || 'You have a new KYVO reminder.' }
+  }
+
+  const title = payload.title || 'KYVO Reminder'
+  const options = {
+    body: payload.body || payload.message || 'You have a new reminder.',
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
+    tag: payload.tag || `kyvo-${Date.now()}`,
+    data: payload.data || {},
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus()
+      }
+      if (clients.openWindow) return clients.openWindow('/')
+      return undefined
+    })
+  )
 })
 
 self.addEventListener('fetch', (event) => {
