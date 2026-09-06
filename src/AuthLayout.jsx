@@ -22,7 +22,7 @@ function AuthLayout({ children }) {
     <div className="auth-shell">
       <div className="blueprint-panel">
         <div className="brand-mark">
-          <span className="wordmark">Blocks</span>
+          <span className="wordmark">KYVO</span>
           <span className="motto">Preserving Your Future</span>
         </div>
 
@@ -44,10 +44,10 @@ function AuthLayout({ children }) {
       <div className="form-panel">
         <div className="form-card">
           {children}
-          <div style={{ textAlign: 'center', marginTop: 24, paddingBottom: 4 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.04em' }}>
-              by J Gravity Labs
-            </div>
+          <div className="auth-attribution">
+            <span className="auth-attribution-brand">KYVO</span>
+            <span className="auth-attribution-separator">·</span>
+            <span>Built by J Gravity Labs</span>
           </div>
         </div>
       </div>
