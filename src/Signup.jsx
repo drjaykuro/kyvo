@@ -23,51 +23,66 @@ function Signup() {
 
     setLoading(true)
 
-    const { data: existing, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .maybeSingle()
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .maybeSingle()
 
-    if (checkError) {
-      setError('Could not check that username: ' + checkError.message)
-      setLoading(false)
-      return
-    }
-    if (existing) {
-      setError('That username is already taken — try another.')
-      setLoading(false)
-      return
-    }
+      if (checkError) {
+        setError('Could not check that username: ' + checkError.message)
+        return
+      }
 
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+      if (existing) {
+        setError('That username is already taken — try another.')
+        return
+      }
 
-    if (signUpError) {
-      setError(signUpError.message)
-      setLoading(false)
-      return
-    }
-
-    const newUserId = authData.user.id
-
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        name,
-        username,
-        dob,
-        time_capsule_note: timeCapsuleNote || null,
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
       })
-      .eq('id', newUserId)
 
-    setLoading(false)
+      if (signUpError) {
+        setError(signUpError.message)
+        return
+      }
 
-    if (updateError) {
-      setError('Account created, but saving your details failed: ' + updateError.message)
-      return
+      // Supabase can create the account without returning a session when
+      // email confirmation is enabled. Never dereference authData.user in
+      // that case because it leaves the signup screen stuck in loading state.
+      const newUserId = authData?.user?.id
+      const hasSession = Boolean(authData?.session)
+
+      if (!newUserId) {
+        setError('Account created. Please confirm your email, then log in to start building.')
+        return
+      }
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          name,
+          username,
+          dob,
+          time_capsule_note: timeCapsuleNote || null,
+        })
+        .eq('id', newUserId)
+
+      if (updateError) {
+        setError('Account created, but saving your details failed: ' + updateError.message)
+        return
+      }
+
+      // When email confirmation is disabled, Supabase returns a session and
+      // App.jsx automatically detects it through onAuthStateChange and opens Home.
+      if (hasSession) return
+    } catch (signupError) {
+      setError(signupError?.message || 'Something went wrong while creating your account.')
+    } finally {
+      setLoading(false)
     }
   }
 
