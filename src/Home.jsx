@@ -10,6 +10,7 @@ import {
   goalAchievedMessage,
   getMissingRecurringInstances,
   earliestCompletionTime,
+  calculateBlockSize,
   todayStr,
   toDateStr,
 } from './blocksLogic'
@@ -34,11 +35,16 @@ function Home({ userId, onAddTask }) {
   const [openSubtasks, setOpenSubtasks] = useState({})
   const [newSubtaskName, setNewSubtaskName] = useState({})
   const [selectedDate, setSelectedDate] = useState(todayStr())
-
   const [showAddGoal, setShowAddGoal] = useState(false)
   const [goalName, setGoalName] = useState('')
   const [goalTimeframe, setGoalTimeframe] = useState('short')
   const [goalTargetDate, setGoalTargetDate] = useState('')
+  const [editingTask, setEditingTask] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editStartTime, setEditStartTime] = useState('')
+  const [editEndTime, setEditEndTime] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
     loadEverything()
@@ -47,7 +53,6 @@ function Home({ userId, onAddTask }) {
   async function loadEverything() {
     setLoading(true)
     setError('')
-
     const [
       { data: profile, error: profileError },
       { data: taskRows, error: tasksError },
@@ -57,7 +62,6 @@ function Home({ userId, onAddTask }) {
       supabase.from('tasks').select('*, subtasks(*)').eq('user_id', userId),
       supabase.from('goals').select('*').eq('user_id', userId),
     ])
-
     if (profileError) setError(profileError.message)
     if (tasksError) setError(tasksError.message)
     if (goalsError) setError(goalsError.message)
@@ -65,9 +69,6 @@ function Home({ userId, onAddTask }) {
     if (profile?.name) setFirstName(profile.name.split(' ')[0])
 
     let loadedTasks = taskRows || []
-
-    // Generate today's instance of any recurring task templates that
-    // haven't spawned yet, same as generate_recurring_tasks() in backend.py.
     const toCreate = getMissingRecurringInstances(loadedTasks)
     if (toCreate.length > 0) {
       const { data: inserted, error: recurError } = await supabase
@@ -78,10 +79,8 @@ function Home({ userId, onAddTask }) {
         loadedTasks = [...loadedTasks, ...inserted]
       }
     }
-
     setTasks(loadedTasks)
     if (goalRows) setGoals(goalRows)
-
     setLoading(false)
   }
 
@@ -89,6 +88,84 @@ function Home({ userId, onAddTask }) {
     const [y, m, d] = selectedDate.split('-').map(Number)
     const next = new Date(y, m - 1, d + delta)
     setSelectedDate(toDateStr(next))
+  }
+
+  function openEditTask(task) {
+    setEditingTask(task)
+    setEditName(task.name || '')
+    setEditDate(task.date || todayStr())
+    setEditStartTime(task.start_time || '')
+    setEditEndTime(task.end_time || '')
+    setError('')
+  }
+
+  function closeEditTask() {
+    if (savingEdit) return
+    setEditingTask(null)
+  }
+
+  async function handleEditTask() {
+    if (!editingTask) return
+    const name = editName.trim()
+    if (!name) {
+      setError('Give the task a name first.')
+      return
+    }
+    if (!editDate || !editStartTime || !editEndTime) {
+      setError('Set the date, start time and end time.')
+      return
+    }
+
+    setSavingEdit(true)
+    setError('')
+    const size = calculateBlockSize(editStartTime, editEndTime)
+    const { data, error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        name,
+        date: editDate,
+        start_time: editStartTime,
+        end_time: editEndTime,
+        size,
+      })
+      .eq('id', editingTask.id)
+      .eq('user_id', userId)
+      .select('*, subtasks(*)')
+      .single()
+
+    if (updateError) {
+      setError(updateError.message)
+      setSavingEdit(false)
+      return
+    }
+
+    setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? data : t)))
+    setEditingTask(null)
+    setSavingEdit(false)
+  }
+
+  async function handleDeleteTask(task) {
+    const confirmed = window.confirm(`Delete “${task.name}”? This will also remove its subtasks.`)
+    if (!confirmed) return
+
+    setError('')
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', task.id)
+      .eq('user_id', userId)
+
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+
+    setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    setOpenSubtasks((prev) => {
+      const next = { ...prev }
+      delete next[task.id]
+      return next
+    })
   }
 
   async function handleMarkDone(task) {
@@ -103,7 +180,6 @@ function Home({ userId, onAddTask }) {
       return
     }
     setError('')
-
     const actualEndTime = new Date().toTimeString().slice(0, 5)
     const { error: updateError } = await supabase
       .from('tasks')
@@ -133,11 +209,9 @@ function Home({ userId, onAddTask }) {
       setError(subError.message)
       return
     }
-
     const updatedSubtasks = task.subtasks.map((s) => (s.id === subtask.id ? { ...s, done: true } : s))
     const allDone = updatedSubtasks.every((s) => s.done)
     let updatedTask = { ...task, subtasks: updatedSubtasks }
-
     if (allDone && !task.done) {
       const allowedFrom = earliestCompletionTime(task)
       if (new Date() >= allowedFrom) {
@@ -149,7 +223,6 @@ function Home({ userId, onAddTask }) {
         updatedTask = { ...updatedTask, done: true, actual_end_time: actualEndTime }
       }
     }
-
     setTasks((prev) => prev.map((t) => (t.id === task.id ? updatedTask : t)))
   }
 
@@ -167,7 +240,6 @@ function Home({ userId, onAddTask }) {
       setError(insertError.message)
       return
     }
-
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, subtasks: [...(t.subtasks || []), data] } : t))
     )
@@ -187,7 +259,6 @@ function Home({ userId, onAddTask }) {
       setError(updateError.message)
       return
     }
-
     await supabase.from('notifications').insert({
       user_id: userId,
       type: 'goal_achieved',
@@ -205,7 +276,6 @@ function Home({ userId, onAddTask }) {
       return
     }
     setError('')
-
     const { data, error: insertError } = await supabase
       .from('goals')
       .insert({
@@ -222,7 +292,6 @@ function Home({ userId, onAddTask }) {
       setError(insertError.message)
       return
     }
-
     setGoals((prev) => [...prev, data])
     setGoalName('')
     setGoalTimeframe('short')
@@ -237,7 +306,6 @@ function Home({ userId, onAddTask }) {
   const today = todayStr()
   const isToday = selectedDate === today
   const viewedTasks = tasks.filter((t) => t.date === selectedDate)
-
   const todayTasksForStats = tasks.filter((t) => t.date === today)
   const completedToday = todayTasksForStats.filter((t) => t.done).length
   const todayPct = todayTasksForStats.length
@@ -246,14 +314,12 @@ function Home({ userId, onAddTask }) {
   const blocksToday =
     completedToday +
     todayTasksForStats.reduce((sum, t) => sum + (t.subtasks || []).filter((s) => s.done).length, 0)
-
   const { level, badge, streak } = getLevelAndBadge(tasks)
   const levelProgress = getLevelProgress(streak, level)
   const xpToday = getDailyScore(tasks, today)
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
-
   const doneTasks = tasks.filter((t) => t.done)
   const sizeCounts = { Small: 0, Medium: 0, Large: 0, Giant: 0 }
   doneTasks.forEach((t) => {
@@ -268,7 +334,6 @@ function Home({ userId, onAddTask }) {
         month: 'short',
         day: 'numeric',
       })
-
   return (
     <div className="home-screen">
       <h1 className="home-greeting">
@@ -280,7 +345,6 @@ function Home({ userId, onAddTask }) {
       </div>
 
       {error && <p className="home-error">{error}</p>}
-
       <div className="level-card">
         <div className="level-card-top">
           <div>
@@ -298,7 +362,6 @@ function Home({ userId, onAddTask }) {
           <div className="progress-fill" style={{ width: `${levelProgress}%` }} />
         </div>
       </div>
-
       <div className="stat-row">
         <div className="stat-card">
           <div className="stat-value small">🔥 {streak}d</div>
@@ -317,7 +380,6 @@ function Home({ userId, onAddTask }) {
           <div className="stat-label">Blocks Today</div>
         </div>
       </div>
-
       <div className="day-nav">
         <button className="day-nav-arrow" onClick={() => shiftDay(-1)} aria-label="Previous day">
           <ChevronLeft size={18} />
@@ -332,7 +394,6 @@ function Home({ userId, onAddTask }) {
           Jump to today
         </button>
       )}
-
       {viewedTasks.length === 0 ? (
         <p className="empty-text">
           {isToday
@@ -346,7 +407,6 @@ function Home({ userId, onAddTask }) {
           const subtasksDone = (task.subtasks || []).filter((s) => s.done).length
           const subtasksTotal = (task.subtasks || []).length
           const isOpen = !!openSubtasks[task.id]
-
           return (
             <div className="task-card" key={task.id}>
               <div className="task-row">
@@ -358,7 +418,6 @@ function Home({ userId, onAddTask }) {
                 >
                   {task.done && '✓'}
                 </button>
-
                 <div className="task-info">
                   <div className={`task-name${task.done ? ' done' : ''}`}>{task.name}</div>
                   <div className="task-meta">
@@ -371,6 +430,25 @@ function Home({ userId, onAddTask }) {
                 </span>
               </div>
 
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  className="subtasks-toggle"
+                  style={{ flex: 1, margin: 0 }}
+                  onClick={() => openEditTask(task)}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  type="button"
+                  className="subtasks-toggle"
+                  style={{ flex: 1, margin: 0 }}
+                  onClick={() => handleDeleteTask(task)}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+
               <button
                 className="subtasks-toggle"
                 onClick={() => setOpenSubtasks((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
@@ -379,7 +457,6 @@ function Home({ userId, onAddTask }) {
                   ? `Subtasks (${subtasksDone}/${subtasksTotal}) ${isOpen ? '▲' : '▼'}`
                   : `+ Add subtasks ${isOpen ? '▲' : '▼'}`}
               </button>
-
               {isOpen && (
                 <div className="subtasks-panel">
                   {(task.subtasks || []).map((sub) => (
@@ -397,7 +474,6 @@ function Home({ userId, onAddTask }) {
                       </span>
                     </div>
                   ))}
-
                   <div className="add-subtask-row">
                     <input
                       className="subtask-input"
@@ -418,13 +494,11 @@ function Home({ userId, onAddTask }) {
           )
         })
       )}
-
       <button className="add-task-button shine" onClick={onAddTask}>
         + Add a task
       </button>
 
       <h2 className="section-heading">Goals</h2>
-
       {goals.length === 0 ? (
         <p className="empty-text">No goals yet — add one below.</p>
       ) : (
@@ -456,7 +530,6 @@ function Home({ userId, onAddTask }) {
           </div>
         ))
       )}
-
       {!showAddGoal ? (
         <button className="subtasks-toggle" onClick={() => setShowAddGoal(true)}>
           + Add a goal
@@ -470,7 +543,6 @@ function Home({ userId, onAddTask }) {
             value={goalName}
             onChange={(e) => setGoalName(e.target.value)}
           />
-
           <span className="field-label">Timeframe</span>
           <div className="icon-grid">
             {['short', 'mid', 'long'].map((tf) => (
@@ -484,7 +556,6 @@ function Home({ userId, onAddTask }) {
               </button>
             ))}
           </div>
-
           <label className="field-label" htmlFor="goal-date">Target date</label>
           <input
             id="goal-date"
@@ -501,7 +572,6 @@ function Home({ userId, onAddTask }) {
       )}
 
       <h2 className="section-heading">Your Blocks</h2>
-
       {doneTasks.length === 0 ? (
         <p className="empty-text">Complete a task to start seeing your blocks here.</p>
       ) : (
@@ -521,9 +591,82 @@ function Home({ userId, onAddTask }) {
           ))}
         </div>
       )}
-     <div style={{ height: '80px' }} />
+
+      {editingTask && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-task-title"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.65)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: '20px',
+          }}
+        >
+          <div
+            className="task-card"
+            style={{ width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', margin: 0 }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+              <h2 id="edit-task-title" className="section-heading" style={{ margin: 0 }}>Edit Task</h2>
+              <button type="button" className="subtasks-toggle" onClick={closeEditTask} disabled={savingEdit}>
+                Cancel
+              </button>
+            </div>
+
+            <label className="field-label" htmlFor="edit-task-name">Task name</label>
+            <input
+              id="edit-task-name"
+              className="field-input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              disabled={savingEdit}
+            />
+
+            <label className="field-label" htmlFor="edit-task-date">Date</label>
+            <input
+              id="edit-task-date"
+              type="date"
+              className="field-input"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              disabled={savingEdit}
+            />
+
+            <div className="time-row">
+              <div className="time-field">
+                <label className="field-label" htmlFor="edit-start-time">Start time</label>
+                <input
+                  id="edit-start-time"
+                  type="time"
+                  className="field-input"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                  disabled={savingEdit}
+                />
+              </div>
+              <div className="time-field">
+                <label className="field-label" htmlFor="edit-end-time">End time</label>
+                <input
+                  id="edit-end-time"
+                  type="time"
+                  className="field-input"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                  disabled={savingEdit}
+                />
+              </div>
+            </div>
+
+            <button className="add-task-button shine" onClick={handleEditTask} disabled={savingEdit}>
+              {savingEdit ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: '80px' }} />
     </div>
   )
 }
-
 export default Home
