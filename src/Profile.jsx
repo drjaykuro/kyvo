@@ -89,8 +89,21 @@ function Profile({ userId }) {
     await supabase.auth.signOut()
   }
 
-  if (loading || !profile) {
+  if (loading) {
     return <p className="home-loading">Loading your profile…</p>
+  }
+
+  if (!profile) {
+    return (
+      <div className="home-screen">
+        <h1 className="home-greeting">Profile</h1>
+        <p className="empty-text">Your profile is not available on this device yet. Connect to the internet once to load it.</p>
+        <button className="logout-button" onClick={handleLogout}>
+          <LogOut size={16} />
+          Log out
+        </button>
+      </div>
+    )
   }
 
   const streak = getStreak(tasks)
