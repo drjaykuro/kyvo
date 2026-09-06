@@ -24,8 +24,22 @@ function Signup() {
     setLoading(true)
 
     try {
-      // Sign up directly. Username availability is handled by the users table,
-      // so signup is never blocked by the offline database wrapper.
+      const { data: existing, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .maybeSingle()
+
+      if (checkError) {
+        setError('Could not check that username: ' + checkError.message)
+        return
+      }
+
+      if (existing) {
+        setError('That username is already taken — try another.')
+        return
+      }
+
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -59,7 +73,6 @@ function Signup() {
         return
       }
 
-      // App.jsx listens for the auth state change and opens Home automatically.
       if (hasSession) return
     } catch (signupError) {
       setError(signupError?.message || 'Something went wrong while creating your account.')
@@ -93,13 +106,7 @@ function Signup() {
       <label className="field-label" htmlFor="capsule">
         A note to the person you're becoming <span className="optional-tag">optional</span>
       </label>
-      <textarea
-        id="capsule"
-        className="field-input field-textarea"
-        value={timeCapsuleNote}
-        onChange={(e) => setTimeCapsuleNote(e.target.value)}
-        placeholder="You'll see this again in 90 days."
-      />
+      <textarea id="capsule" className="field-input field-textarea" value={timeCapsuleNote} onChange={(e) => setTimeCapsuleNote(e.target.value)} placeholder="You'll see this again in 90 days." />
 
       <button className="primary-button shine" type="submit" disabled={loading}>
         {loading ? 'Laying the foundation…' : 'Start building'}
