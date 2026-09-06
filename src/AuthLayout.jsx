@@ -42,7 +42,14 @@ function AuthLayout({ children }) {
       </div>
 
       <div className="form-panel">
-        <div className="form-card">{children}</div>
+        <div className="form-card">
+          {children}
+          <div style={{ textAlign: 'center', marginTop: 24, paddingBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.04em' }}>
+              by J Gravity Labs
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
