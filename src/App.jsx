@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { requestNotificationPermission, showKyvoNotification } from './notifications'
 import AuthLayout from './AuthLayout'
 import Signup from './Signup'
 import Login from './Login'
@@ -18,6 +19,11 @@ function App() {
   const [showAddTask, setShowAddTask] = useState(false)
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
   const [justReconnected, setJustReconnected] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState(() => (
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  ))
+  const [latestNotification, setLatestNotification] = useState(null)
+  const seenNotificationIds = useRef(new Set())
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -27,6 +33,8 @@ function App() {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      seenNotificationIds.current.clear()
+      setLatestNotification(null)
     })
 
     const handleOffline = () => {
@@ -49,6 +57,55 @@ function App() {
       window.removeEventListener('online', handleOnline)
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id || offline) return undefined
+
+    let cancelled = false
+
+    async function checkNotifications() {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('seen', false)
+        .order('date', { ascending: true })
+        .limit(10)
+
+      if (cancelled || error || !data?.length) return
+
+      for (const notification of data) {
+        if (!notification?.id || seenNotificationIds.current.has(notification.id)) continue
+        seenNotificationIds.current.add(notification.id)
+        setLatestNotification(notification)
+
+        await showKyvoNotification('KYVO Reminder', {
+          body: notification.message,
+          tag: `kyvo-${notification.id}`,
+          data: { notificationId: notification.id },
+        })
+
+        await supabase
+          .from('notifications')
+          .update({ seen: true })
+          .eq('id', notification.id)
+          .eq('user_id', session.user.id)
+      }
+    }
+
+    checkNotifications().catch(() => {})
+    const interval = window.setInterval(() => checkNotifications().catch(() => {}), 30000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [session?.user?.id, offline])
+
+  async function enableNotifications() {
+    const permission = await requestNotificationPermission()
+    setNotificationPermission(permission)
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -92,10 +149,70 @@ function App() {
     </div>
   ) : null
 
+  const notificationBanner = notificationPermission === 'default' ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: offline || justReconnected ? 42 : 0,
+        left: 0,
+        right: 0,
+        zIndex: 999,
+        padding: '8px 16px',
+        textAlign: 'center',
+        fontSize: 12,
+        background: 'var(--bg, #0b0b0b)',
+        color: 'var(--text, #fff)',
+        borderBottom: '1px solid var(--border, rgba(255,255,255,.12))',
+      }}
+    >
+      KYVO can remind you about upcoming blocks.{' '}
+      <button
+        type="button"
+        onClick={enableNotifications}
+        style={{
+          border: 0,
+          background: 'transparent',
+          color: 'var(--accent, #8fff72)',
+          fontWeight: 700,
+          cursor: 'pointer',
+          padding: 0,
+        }}
+      >
+        Enable notifications
+      </button>
+    </div>
+  ) : null
+
+  const reminderBanner = latestNotification ? (
+    <div
+      role="status"
+      onClick={() => setLatestNotification(null)}
+      style={{
+        position: 'fixed',
+        left: 16,
+        right: 16,
+        bottom: 84,
+        zIndex: 1001,
+        padding: '12px 14px',
+        borderRadius: 12,
+        background: 'var(--card, #151515)',
+        color: 'var(--text, #fff)',
+        border: '1px solid var(--border, rgba(255,255,255,.12))',
+        boxShadow: '0 12px 30px rgba(0,0,0,.25)',
+        cursor: 'pointer',
+      }}
+    >
+      <strong style={{ display: 'block', marginBottom: 4 }}>KYVO Reminder</strong>
+      <span style={{ fontSize: 13, color: 'var(--text-dim, #aaa)' }}>{latestNotification.message}</span>
+    </div>
+  ) : null
+
   if (activeTab === 'home' && showAddTask) {
     return (
       <>
         {statusBanner}
+        {notificationBanner}
+        {reminderBanner}
         <AddTask
           userId={session.user.id}
           onBack={() => setShowAddTask(false)}
@@ -108,6 +225,8 @@ function App() {
   return (
     <div style={{ minHeight: '100vh' }}>
       {statusBanner}
+      {notificationBanner}
+      {reminderBanner}
       {activeTab === 'home' && (
         <Home userId={session.user.id} onAddTask={() => setShowAddTask(true)} />
       )}
