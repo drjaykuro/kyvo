@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { requestNotificationPermission, showKyvoNotification } from './notifications'
+import { requestNotificationPermission, registerPushSubscription, showKyvoNotification } from './notifications'
 import AuthLayout from './AuthLayout'
 import Signup from './Signup'
 import Login from './Login'
@@ -63,6 +63,23 @@ function App() {
 
     let cancelled = false
 
+    async function setupPush() {
+      if (Notification.permission === 'granted') {
+        await registerPushSubscription(supabase, session.user.id)
+      }
+    }
+
+    setupPush().catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [session?.user?.id, offline])
+
+  useEffect(() => {
+    if (!session?.user?.id || offline) return undefined
+
+    let cancelled = false
+
     async function checkNotifications() {
       const { data, error } = await supabase
         .from('notifications')
@@ -105,6 +122,9 @@ function App() {
   async function enableNotifications() {
     const permission = await requestNotificationPermission()
     setNotificationPermission(permission)
+    if (permission === 'granted' && session?.user?.id) {
+      await registerPushSubscription(supabase, session.user.id)
+    }
   }
 
   async function handleLogout() {
