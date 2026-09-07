@@ -21,7 +21,7 @@ export async function registerPushSubscription(supabase, userId) {
 
   try {
     const registration = await navigator.serviceWorker.ready
-    const { data, error } = await supabase.functions.invoke('push-config', { method: 'GET' })
+    const { data, error } = await supabase.functions.invoke('push-config-v2', { body: {} })
     if (error || !data?.publicKey) return { ok: false, reason: error?.message || 'missing-public-key' }
 
     let subscription = await registration.pushManager.getSubscription()
