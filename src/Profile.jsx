@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react'
-import { Lock, Check, LogOut } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Lock, Check, LogOut, Camera } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { getStreak, getAllTimeScore, BADGE_TIERS } from './blocksLogic'
 import './Home.css'
 import './Profile.css'
+
+const storageClient = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+)
+
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 function Profile({ userId }) {
   const [profile, setProfile] = useState(null)
@@ -13,10 +22,12 @@ function Profile({ userId }) {
   const [bio, setBio] = useState('')
   const [bioSaving, setBioSaving] = useState(false)
   const [bioSaved, setBioSaved] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [feedbackStatus, setFeedbackStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const avatarInputRef = useRef(null)
 
   useEffect(() => {
     loadEverything()
@@ -54,6 +65,63 @@ function Profile({ userId }) {
     }
 
     setLoading(false)
+  }
+
+  async function handleAvatarChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!AVATAR_TYPES.includes(file.type)) {
+      setError('Please choose a JPG, PNG, WEBP, or GIF image.')
+      return
+    }
+    if (file.size > MAX_AVATAR_SIZE) {
+      setError('Profile pictures must be 2 MB or smaller.')
+      return
+    }
+
+    setAvatarUploading(true)
+    setError('')
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${userId}/${crypto.randomUUID()}.${extension}`
+      const { error: uploadError } = await storageClient.storage
+        .from('avatars')
+        .upload(path, file, {
+          cacheControl: '31536000',
+          contentType: file.type,
+          upsert: false,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = storageClient.storage.from('avatars').getPublicUrl(path)
+      const avatarUrl = publicUrlData.publicUrl
+
+      const { error: profileError } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', userId)
+
+      if (profileError) throw profileError
+
+      const previousUrl = profile?.avatar_url
+      setProfile((current) => ({ ...current, avatar_url: avatarUrl }))
+
+      if (previousUrl) {
+        const marker = '/storage/v1/object/public/avatars/'
+        const previousPath = previousUrl.includes(marker) ? previousUrl.split(marker)[1].split('?')[0] : null
+        if (previousPath) {
+          await storageClient.storage.from('avatars').remove([previousPath]).catch(() => {})
+        }
+      }
+    } catch (avatarError) {
+      setError(avatarError.message || 'Could not update your profile picture. Please try again.')
+    } finally {
+      setAvatarUploading(false)
+    }
   }
 
   async function handleSaveBio() {
@@ -135,13 +203,35 @@ function Profile({ userId }) {
       {error && <p className="home-error">{error}</p>}
 
       <div className="profile-header">
-        <div className="avatar-circle block-3d shine" style={{ '--block-color': 'var(--green)' }}>
-          {initials}
-        </div>
+        <button
+          type="button"
+          className="avatar-button"
+          onClick={() => avatarInputRef.current?.click()}
+          disabled={avatarUploading}
+          aria-label="Change profile picture"
+        >
+          <div className="avatar-circle block-3d shine" style={{ '--block-color': 'var(--green)' }}>
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="Profile" className="avatar-image" />
+            ) : (
+              initials
+            )}
+          </div>
+          <span className="avatar-camera"><Camera size={14} /></span>
+        </button>
+        <input
+          ref={avatarInputRef}
+          className="avatar-file-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleAvatarChange}
+        />
         <div>
           <div className="profile-name">{profile.name}</div>
           <div className="profile-username">@{profile.username}</div>
-          <div className="profile-joined">Joined {profile.signup_date}</div>
+          <div className="profile-joined">
+            {avatarUploading ? 'Uploading profile picture…' : `Joined ${profile.signup_date}`}
+          </div>
         </div>
       </div>
 
