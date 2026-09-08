@@ -11,8 +11,62 @@ const storageClient = createClient(
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 )
 
-const MAX_AVATAR_SIZE = 2 * 1024 * 1024
+const MAX_AVATAR_SIZE = 10 * 1024 * 1024
+const MAX_AVATAR_DIMENSION = 800
+const TARGET_AVATAR_SIZE = 900 * 1024
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+async function compressAvatar(file) {
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const image = new Image()
+    image.decoding = 'async'
+    image.src = objectUrl
+    await image.decode()
+
+    const scale = Math.min(1, MAX_AVATAR_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight))
+    const width = Math.max(1, Math.round(image.naturalWidth * scale))
+    const height = Math.max(1, Math.round(image.naturalHeight * scale))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Could not prepare the image for upload.')
+
+    context.imageSmoothingEnabled = true
+    context.imageSmoothingQuality = 'high'
+    context.drawImage(image, 0, 0, width, height)
+
+    const qualities = [0.82, 0.72, 0.62, 0.52]
+    let bestBlob = null
+
+    for (const quality of qualities) {
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/webp', quality)
+      })
+      if (!blob) continue
+      bestBlob = blob
+      if (blob.size <= TARGET_AVATAR_SIZE) break
+    }
+
+    if (!bestBlob) {
+      bestBlob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.78)
+      })
+    }
+
+    if (!bestBlob) throw new Error('Could not compress the image. Please try another photo.')
+
+    return new File([bestBlob], 'avatar.webp', {
+      type: bestBlob.type || 'image/webp',
+      lastModified: Date.now(),
+    })
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
 
 function Profile({ userId }) {
   const [profile, setProfile] = useState(null)
@@ -77,7 +131,7 @@ function Profile({ userId }) {
       return
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Profile pictures must be 2 MB or smaller.')
+      setError('Profile pictures must be 10 MB or smaller.')
       return
     }
 
@@ -85,13 +139,13 @@ function Profile({ userId }) {
     setError('')
 
     try {
-      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${userId}/${crypto.randomUUID()}.${extension}`
+      const compressedFile = await compressAvatar(file)
+      const path = `${userId}/${crypto.randomUUID()}.webp`
       const { error: uploadError } = await storageClient.storage
         .from('avatars')
-        .upload(path, file, {
+        .upload(path, compressedFile, {
           cacheControl: '31536000',
-          contentType: file.type,
+          contentType: 'image/webp',
           upsert: false,
         })
 
@@ -230,7 +284,7 @@ function Profile({ userId }) {
           <div className="profile-name">{profile.name}</div>
           <div className="profile-username">@{profile.username}</div>
           <div className="profile-joined">
-            {avatarUploading ? 'Uploading profile picture…' : `Joined ${profile.signup_date}`}
+            {avatarUploading ? 'Optimizing profile picture…' : `Joined ${profile.signup_date}`}
           </div>
         </div>
       </div>
