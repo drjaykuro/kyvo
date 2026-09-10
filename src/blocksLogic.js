@@ -15,7 +15,6 @@ export const CATEGORY_COLORS = {
 export const SIZE_POINTS = { Small: 1, Medium: 2.3, Large: 3.5, Giant: 5 }
 export const DIFFICULTY_MULTIPLIER = { easy: 1, medium: 1.5, hard: 2 }
 
-// (level, days_required, badge_name) — must stay ascending, same as BADGE_TIERS in backend.py
 export const BADGE_TIERS = [
   [1, 7, 'Foundation Block I'],
   [2, 14, 'Foundation Block II'],
@@ -75,8 +74,6 @@ export const MOTIVATIONAL_QUOTES = [
   "You don't need a perfect day to make progress.",
 ]
 
-// Local-date formatting (avoids UTC-shift bugs toISOString() would cause
-// for a Nigeria-based user — always uses the browser's local date).
 export function toDateStr(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -102,9 +99,6 @@ export function calculateBlockSize(startTime, endTime) {
   return 'Giant'
 }
 
-// Anti-cheat: a task can only be marked done starting 10 minutes before its
-// scheduled end time. Handles overnight tasks (end time past midnight) the
-// same way backend.py's _earliest_completion_time() does.
 export function earliestCompletionTime(task) {
   const [y, m, d] = task.date.split('-').map(Number)
   const [sh, sm] = task.start_time.split(':').map(Number)
@@ -115,9 +109,6 @@ export function earliestCompletionTime(task) {
   return new Date(end.getTime() - 10 * 60 * 1000)
 }
 
-// Same day-walking logic as get_streak() in backend.py: today only needs to
-// be complete to count, but an unfinished today doesn't zero out past days.
-// A genuinely missed PAST day breaks the streak.
 export function getStreak(tasks) {
   let streak = 0
   let currentDay = new Date()
@@ -165,7 +156,6 @@ export function getLevelAndBadge(tasks) {
   return { level, badge, streak }
 }
 
-// Progress toward the NEXT tier, for the progress bar. Returns 0-100.
 export function getLevelProgress(streak, level) {
   if (level >= BADGE_TIERS.length) return 100
   const lo = level === 0 ? 0 : BADGE_TIERS[level - 1][1]
@@ -205,10 +195,6 @@ export function getScheduledQuote() {
   return null
 }
 
-
-// Caches one quote per calendar day in localStorage, mirroring the
-// st.session_state date-keyed cache from the Streamlit version — but this
-// survives full page reloads too, not just re-renders.
 export function getDailyQuote() {
   const key = `blocks_daily_quote_${todayStr()}`
   const cached = localStorage.getItem(key)
@@ -218,8 +204,7 @@ export function getDailyQuote() {
   localStorage.setItem(key, quote)
   return quote
 }
-// Stats for a given time window, used by the Castle/Blocks screen's
-// Day/Week/Month/Year/All Time selector.
+
 export function getPeriodStats(tasks, period) {
   function daysBetween(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number)
@@ -272,6 +257,7 @@ export function getPeriodStats(tasks, period) {
     timeFocusedHours,
   }
 }
+
 export const CATEGORY_COLOR_HEX = {
   spiritual: '#a855f7',
   work: 'var(--green)',
@@ -341,23 +327,43 @@ export function getCategoryBreakdown(tasks) {
   })
   return rates
 }
-// Ported from generate_recurring_tasks() in backend.py. Given the tasks
-// already loaded, returns any NEW task rows (no id yet) that need to be
-// inserted today because a recurring template hasn't spawned today's
-// instance yet. Pure function — the caller does the actual DB insert.
+
+// Recurring tasks are generated one occurrence ahead.
+// Daily: Sept 10 -> Sept 11 -> Sept 12 -> ...
+// Weekly: Sept 10 -> Sept 17 -> Sept 24 -> ...
+// We only advance occurrences whose date has arrived, so we do NOT create
+// an unlimited number of future rows. This also means the next day's task is
+// already available when the user navigates to that date.
 export function getMissingRecurringInstances(tasks) {
   const todayString = todayStr()
-  const templates = tasks.filter((t) => t.recurring)
   const toCreate = []
 
-  for (const template of templates) {
-    const alreadyExists = tasks.some((t) => t.name === template.name && t.date === todayString)
+  for (const template of tasks.filter((t) => t.recurring && t.date <= todayString)) {
+    const [y, m, d] = template.date.split('-').map(Number)
+    const baseDate = new Date(y, m - 1, d)
+    let nextDate = null
+
+    if (template.recurring === 'daily') {
+      nextDate = new Date(baseDate)
+      nextDate.setDate(nextDate.getDate() + 1)
+    } else if (template.recurring === 'weekly') {
+      nextDate = new Date(baseDate)
+      nextDate.setDate(nextDate.getDate() + 7)
+    }
+
+    if (!nextDate) continue
+    const nextDateString = toDateStr(nextDate)
+
+    const alreadyExists = tasks.some(
+      (t) => t.name === template.name && t.date === nextDateString
+    )
     if (alreadyExists) continue
 
-    const baseFields = {
+    toCreate.push({
       user_id: template.user_id,
       name: template.name,
       done: false,
+      date: nextDateString,
       start_time: template.start_time,
       end_time: template.end_time,
       recurring: template.recurring,
@@ -367,18 +373,7 @@ export function getMissingRecurringInstances(tasks) {
       difficulty: template.difficulty,
       miss_reason: null,
       actual_end_time: null,
-    }
-
-    if (template.recurring === 'daily') {
-      toCreate.push({ ...baseFields, date: todayString })
-    } else if (template.recurring === 'weekly') {
-      const [y, m, d] = template.date.split('-').map(Number)
-      const originalDate = new Date(y, m - 1, d)
-      const today = new Date()
-      if (today.getDay() === originalDate.getDay()) {
-        toCreate.push({ ...baseFields, date: todayString })
-      }
-    }
+    })
   }
 
   return toCreate
