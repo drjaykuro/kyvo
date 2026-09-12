@@ -8,11 +8,47 @@ import {
   getDifficultyBreakdown,
   getCategoryBreakdown,
   CATEGORY_COLOR_HEX,
+  BADGE_TIERS,
 } from './blocksLogic'
 import './Home.css'
 import './Progress.css'
 
 const DIFFICULTY_COLOR = { easy: 'var(--size-small)', medium: 'var(--size-medium)', hard: 'var(--size-large)' }
+
+function getHighestHistoricalLevel(tasks) {
+  const completedDates = new Set(
+    tasks.filter((t) => t.done).map((t) => t.date)
+  )
+  if (completedDates.size === 0) return 0
+
+  const dates = [...completedDates].sort()
+  let bestStreak = 0
+  let run = 0
+  let previous = null
+
+  for (const dateStr of dates) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const current = new Date(y, m - 1, d)
+    current.setHours(0, 0, 0, 0)
+
+    if (previous) {
+      const gap = Math.round((current - previous) / 86400000)
+      run = gap === 1 ? run + 1 : 1
+    } else {
+      run = 1
+    }
+
+    bestStreak = Math.max(bestStreak, run)
+    previous = current
+  }
+
+  let level = 0
+  for (const [lvl, daysRequired] of BADGE_TIERS) {
+    if (bestStreak >= daysRequired) level = lvl
+    else break
+  }
+  return level
+}
 
 function Progress({ userId }) {
   const [tasks, setTasks] = useState([])
@@ -31,7 +67,7 @@ function Progress({ userId }) {
 
     const { data: profile, error: profileError } = await supabase
       .from('users')
-      .select('username')
+      .select('username, level')
       .eq('id', userId)
       .single()
     if (profileError) setError(profileError.message)
@@ -46,11 +82,16 @@ function Progress({ userId }) {
     const loadedTasks = taskRows || []
     setTasks(loadedTasks)
 
-    // Compute this user's score/level, then write it to their own public
-    // profile columns so the leaderboard (below) can read it without ever
-    // touching another user's private tasks.
+    // Level is a permanent milestone. A missed day can reset the current
+    // streak, but it must never lower a level already achieved. We use both
+    // the stored profile level and the highest completed run in task history
+    // so previously earned levels can recover even if an older app version
+    // accidentally overwrote the profile level after a missed day.
     const score = getAllTimeScore(loadedTasks)
-    const { level } = getLevelAndBadge(loadedTasks)
+    const historicalLevel = getHighestHistoricalLevel(loadedTasks)
+    const storedLevel = Number(profile?.level) || 0
+    const permanentLevel = Math.max(storedLevel, historicalLevel)
+    const { level } = getLevelAndBadge(loadedTasks, permanentLevel)
     await supabase.from('users').update({ xp_score: score, level }).eq('id', userId)
 
     const { data: board, error: boardError } = await supabase
@@ -69,7 +110,12 @@ function Progress({ userId }) {
     return <p className="home-loading">Loading your progress…</p>
   }
 
-  const { level, badge, streak } = getLevelAndBadge(tasks)
+  const storedLevel = (() => {
+    const historicalLevel = getHighestHistoricalLevel(tasks)
+    const currentLevel = getLevelAndBadge(tasks).level
+    return Math.max(historicalLevel, currentLevel)
+  })()
+  const { level, badge, streak } = getLevelAndBadge(tasks, storedLevel)
   const levelProgress = getLevelProgress(streak, level)
   const sevenDay = getSevenDayStats(tasks)
   const weekCompleted = sevenDay.reduce((s, d) => s + d.completed, 0)
