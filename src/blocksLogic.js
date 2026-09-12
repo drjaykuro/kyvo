@@ -108,50 +108,30 @@ export function earliestCompletionTime(task) {
   if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
   return new Date(end.getTime() - 10 * 60 * 1000)
 }
-// Same day-walking logic as get_streak() in backend.py: today only needs to
-// be complete to count, but an unfinished today doesn't zero out past days.
-// A genuinely missed PAST day breaks the streak.
-export function getStreak(tasks) {
-  let streak = 0
-  let currentDay = new Date()
-  const todayString = todayStr()
 
-  while (true) {
-    const dayStr = toDateStr(currentDay)
-    const dayTasks = tasks.filter((t) => t.date === dayStr)
+// Returns dates where every task scheduled for that day was completed.
+// A day with no tasks is not considered a completed streak day.
+function getCompletedDayDates(tasks) {
+  const byDate = new Map()
+  const today = todayStr()
 
-    if (dayTasks.length === 0) {
-      if (dayStr === todayString) {
-        currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
-        continue
-      } else {
-        break
-      }
-    }
-
-    if (dayTasks.every((t) => t.done)) {
-      streak += 1
-      currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
-    } else if (dayStr === todayString) {
-      currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
-      continue
-    } else {
-      break
-    }
+  for (const task of tasks) {
+    if (!task.date || task.date > today) continue
+    if (!byDate.has(task.date)) byDate.set(task.date, [])
+    byDate.get(task.date).push(task)
   }
 
-  return streak
+  return new Set(
+    [...byDate.entries()]
+      .filter(([, dayTasks]) => dayTasks.length > 0 && dayTasks.every((task) => task.done))
+      .map(([date]) => date)
+  )
 }
 
 // Highest completed consecutive-day run anywhere in history. This preserves
 // every level already earned even when the current streak is later broken.
 export function getHistoricalBestStreak(tasks) {
-  const completedDates = new Set()
-  for (const task of tasks) {
-    if (!task.date || !task.done) continue
-    completedDates.add(task.date)
-  }
-
+  const completedDates = getCompletedDayDates(tasks)
   if (completedDates.size === 0) return 0
 
   const dates = [...completedDates].sort()
@@ -173,6 +153,47 @@ export function getHistoricalBestStreak(tasks) {
   }
 
   return best
+}
+
+// The streak uses milestone checkpoints. Once a user has reached a milestone,
+// a later missed day drops them back to that milestone instead of all the way
+// to zero. They can then build upward from that checkpoint again.
+export function getStreak(tasks) {
+  let streak = 0
+  let currentDay = new Date()
+  const todayString = todayStr()
+
+  while (true) {
+    const dayStr = toDateStr(currentDay)
+    const dayTasks = tasks.filter((t) => t.date === dayStr)
+
+    if (dayTasks.length === 0) {
+      if (dayStr === todayString) {
+        currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
+        continue
+      }
+      break
+    }
+
+    if (dayTasks.every((t) => t.done)) {
+      streak += 1
+      currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
+    } else if (dayStr === todayString) {
+      currentDay = new Date(currentDay.getTime() - 24 * 60 * 60 * 1000)
+      continue
+    } else {
+      break
+    }
+  }
+
+  const historicalBest = getHistoricalBestStreak(tasks)
+  let checkpoint = 0
+  for (const [, daysRequired] of BADGE_TIERS) {
+    if (historicalBest >= daysRequired) checkpoint = daysRequired
+    else break
+  }
+
+  return Math.max(streak, checkpoint)
 }
 
 export function getLevelAndBadge(tasks, storedLevel = 0) {
@@ -367,39 +388,15 @@ export function getCategoryBreakdown(tasks) {
 // Recurring tasks are generated one occurrence ahead.
 // Daily: Sept 10 -> Sept 11 -> Sept 12 -> ...
 // Weekly: Sept 10 -> Sept 17 -> Sept 24 -> ...
-// We only advance occurrences whose date has arrived, so we do NOT create
-// an unlimited number of future rows. This also means the next day's task is
-// already available when the user navigates to that date.
 export function getMissingRecurringInstances(tasks) {
-  const todayString = todayStr()
+  const templates = tasks.filter((t) => t.recurring)
   const toCreate = []
 
-  for (const template of tasks.filter((t) => t.recurring && t.date <= todayString)) {
-    const [y, m, d] = template.date.split('-').map(Number)
-    const baseDate = new Date(y, m - 1, d)
-    let nextDate = null
-
-    if (template.recurring === 'daily') {
-      nextDate = new Date(baseDate)
-      nextDate.setDate(nextDate.getDate() + 1)
-    } else if (template.recurring === 'weekly') {
-      nextDate = new Date(baseDate)
-      nextDate.setDate(nextDate.getDate() + 7)
-    }
-
-    if (!nextDate) continue
-    const nextDateString = toDateStr(nextDate)
-
-    const alreadyExists = tasks.some(
-      (t) => t.name === template.name && t.date === nextDateString
-    )
-    if (alreadyExists) continue
-
-    toCreate.push({
+  for (const template of templates) {
+    const baseFields = {
       user_id: template.user_id,
       name: template.name,
       done: false,
-      date: nextDateString,
       start_time: template.start_time,
       end_time: template.end_time,
       recurring: template.recurring,
@@ -409,12 +406,34 @@ export function getMissingRecurringInstances(tasks) {
       difficulty: template.difficulty,
       miss_reason: null,
       actual_end_time: null,
-    })
+    }
+
+    const templateDate = template.date
+    const [y, m, d] = templateDate.split('-').map(Number)
+    const originalDate = new Date(y, m - 1, d)
+    const nextDate = new Date(originalDate)
+
+    if (template.recurring === 'daily') {
+      nextDate.setDate(nextDate.getDate() + 1)
+    } else if (template.recurring === 'weekly') {
+      nextDate.setDate(nextDate.getDate() + 7)
+    } else {
+      continue
+    }
+
+    const nextDateString = toDateStr(nextDate)
+    const alreadyExists = tasks.some(
+      (t) => t.name === template.name && t.date === nextDateString && t.recurring === template.recurring
+    )
+
+    if (!alreadyExists) {
+      toCreate.push({ ...baseFields, date: nextDateString })
+    }
   }
 
   return toCreate
 }
 
 export function goalAchievedMessage(goalName) {
-  return `Goal achieved: ${goalName}! What's next? 🧱`
+  return `Goal achieved: ${goalName}. Keep building.`
 }
