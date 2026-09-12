@@ -237,14 +237,44 @@ function Profile({ userId }) {
     .slice(0, 2)
     .toUpperCase()
 
-  let currentLevel = 0
-  let currentBadge = 'No badge yet'
-  for (const [lvl, days, name] of BADGE_TIERS) {
-    if (streak >= days) {
-      currentLevel = lvl
-      currentBadge = name
-    } else break
-  }
+  // A missed day resets the current streak, but never removes a level already earned.
+  // Use the user's persisted level as the floor, while also recovering a level from
+  // historical completed-task streaks for users who earned it before this rule existed.
+  const historicalLevel = (() => {
+    const completedDates = new Set(
+      tasks
+        .filter((task) => task.done && task.date)
+        .map((task) => task.date)
+    )
+
+    let bestRun = 0
+    let run = 0
+    let previousDate = null
+    const sortedDates = [...completedDates].sort()
+
+    for (const dateString of sortedDates) {
+      if (!previousDate) {
+        run = 1
+      } else {
+        const previous = new Date(`${previousDate}T00:00:00`)
+        const current = new Date(`${dateString}T00:00:00`)
+        const diffDays = Math.round((current - previous) / 86400000)
+        run = diffDays === 1 ? run + 1 : 1
+      }
+      bestRun = Math.max(bestRun, run)
+      previousDate = dateString
+    }
+
+    let recoveredLevel = 0
+    for (const [lvl, days] of BADGE_TIERS) {
+      if (bestRun >= days) recoveredLevel = lvl
+      else break
+    }
+    return recoveredLevel
+  })()
+
+  const currentLevel = Math.max(Number(profile.level) || 0, historicalLevel)
+  const currentBadge = BADGE_TIERS.find(([lvl]) => lvl === currentLevel)?.[2] || 'No badge yet'
 
   return (
     <div className="home-screen">
@@ -312,7 +342,7 @@ function Profile({ userId }) {
       <h2 className="section-heading">Badges</h2>
       <div className="badge-list">
         {BADGE_TIERS.map(([lvl, days, name]) => {
-          const achieved = streak >= days
+          const achieved = currentLevel >= lvl
           return (
             <div className={`badge-row${achieved ? ' achieved' : ''}`} key={name}>
               <div className={`badge-icon${achieved ? ' achieved' : ''}`}>
