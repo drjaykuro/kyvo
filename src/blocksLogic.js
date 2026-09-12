@@ -11,10 +11,9 @@ export const CATEGORY_COLORS = {
   eat: 'brown',
   other: 'white',
 }
-
 export const SIZE_POINTS = { Small: 1, Medium: 2.3, Large: 3.5, Giant: 5 }
 export const DIFFICULTY_MULTIPLIER = { easy: 1, medium: 1.5, hard: 2 }
-
+// (level, days_required, badge_name) — must stay ascending, same as BADGE_TIERS in backend.py
 export const BADGE_TIERS = [
   [1, 7, 'Foundation Block I'],
   [2, 14, 'Foundation Block II'],
@@ -32,7 +31,6 @@ export const BADGE_TIERS = [
   [14, 1260, 'Legacy II'],
   [15, 1440, 'Legacy III'],
 ]
-
 export const MOTIVATIONAL_QUOTES = [
   'No place for fear and worry.',
   'I can do all things.',
@@ -73,7 +71,8 @@ export const MOTIVATIONAL_QUOTES = [
   'Breathe. Choose a block. Begin.',
   "You don't need a perfect day to make progress.",
 ]
-
+// Local-date formatting (avoids UTC-shift bugs toISOString() would cause
+// for a Nigeria-based user — always uses the browser's local date).
 export function toDateStr(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -84,7 +83,6 @@ export function toDateStr(d) {
 export function todayStr() {
   return toDateStr(new Date())
 }
-
 export function calculateBlockSize(startTime, endTime) {
   const [sh, sm] = startTime.split(':').map(Number)
   const [eh, em] = endTime.split(':').map(Number)
@@ -98,7 +96,9 @@ export function calculateBlockSize(startTime, endTime) {
   if (minutes <= 180) return 'Large'
   return 'Giant'
 }
-
+// Anti-cheat: a task can only be marked done starting 10 minutes before its
+// scheduled end time. Handles overnight tasks (end time past midnight) the
+// same way backend.py's _earliest_completion_time() does.
 export function earliestCompletionTime(task) {
   const [y, m, d] = task.date.split('-').map(Number)
   const [sh, sm] = task.start_time.split(':').map(Number)
@@ -108,7 +108,9 @@ export function earliestCompletionTime(task) {
   if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
   return new Date(end.getTime() - 10 * 60 * 1000)
 }
-
+// Same day-walking logic as get_streak() in backend.py: today only needs to
+// be complete to count, but an unfinished today doesn't zero out past days.
+// A genuinely missed PAST day breaks the streak.
 export function getStreak(tasks) {
   let streak = 0
   let currentDay = new Date()
@@ -141,21 +143,58 @@ export function getStreak(tasks) {
   return streak
 }
 
-export function getLevelAndBadge(tasks) {
+// Highest completed consecutive-day run anywhere in history. This preserves
+// every level already earned even when the current streak is later broken.
+export function getHistoricalBestStreak(tasks) {
+  const completedDates = new Set()
+  for (const task of tasks) {
+    if (!task.date || !task.done) continue
+    completedDates.add(task.date)
+  }
+
+  if (completedDates.size === 0) return 0
+
+  const dates = [...completedDates].sort()
+  let best = 0
+  let run = 0
+  let previous = null
+
+  for (const dateStr of dates) {
+    if (previous) {
+      const [y, m, d] = previous.split('-').map(Number)
+      const next = new Date(y, m - 1, d)
+      next.setDate(next.getDate() + 1)
+      run = toDateStr(next) === dateStr ? run + 1 : 1
+    } else {
+      run = 1
+    }
+    best = Math.max(best, run)
+    previous = dateStr
+  }
+
+  return best
+}
+
+export function getLevelAndBadge(tasks, storedLevel = 0) {
   const streak = getStreak(tasks)
-  let level = 0
-  let badge = 'No badge yet'
+  const historicalBest = getHistoricalBestStreak(tasks)
+
+  let earnedLevel = 0
+  let earnedBadge = 'No badge yet'
   for (const [lvl, daysRequired, badgeName] of BADGE_TIERS) {
-    if (streak >= daysRequired) {
-      level = lvl
-      badge = badgeName
+    if (historicalBest >= daysRequired) {
+      earnedLevel = lvl
+      earnedBadge = badgeName
     } else {
       break
     }
   }
+
+  const level = Math.max(Number(storedLevel) || 0, earnedLevel)
+  const badge = level > 0 ? BADGE_TIERS[level - 1][2] : earnedBadge
   return { level, badge, streak }
 }
-
+// Progress toward the NEXT tier, for the progress bar. Returns 0-100.
 export function getLevelProgress(streak, level) {
   if (level >= BADGE_TIERS.length) return 100
   const lo = level === 0 ? 0 : BADGE_TIERS[level - 1][1]
@@ -183,7 +222,6 @@ export function getDailyScore(tasks, dayStr) {
 
   return total
 }
-
 export function getMotivationalQuote() {
   return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]
 }
@@ -195,16 +233,19 @@ export function getScheduledQuote() {
   return null
 }
 
+// Caches one quote per calendar day in localStorage, mirroring the
+// st.session_state date-keyed cache from the Streamlit version — but this
+// survives full page reloads too, not just re-renders.
 export function getDailyQuote() {
   const key = `blocks_daily_quote_${todayStr()}`
   const cached = localStorage.getItem(key)
   if (cached) return cached
-
   const quote = getScheduledQuote() || getMotivationalQuote()
   localStorage.setItem(key, quote)
   return quote
 }
-
+// Stats for a given time window, used by the Castle/Blocks screen's
+// Day/Week/Month/Year/All Time selector.
 export function getPeriodStats(tasks, period) {
   function daysBetween(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number)
@@ -257,7 +298,6 @@ export function getPeriodStats(tasks, period) {
     timeFocusedHours,
   }
 }
-
 export const CATEGORY_COLOR_HEX = {
   spiritual: '#a855f7',
   work: 'var(--green)',
@@ -267,7 +307,6 @@ export const CATEGORY_COLOR_HEX = {
   eat: '#b5563c',
   other: '#e8ebf5',
 }
-
 export function taskDurationMinutes(t) {
   const [sh, sm] = t.start_time.split(':').map(Number)
   const [eh, em] = t.end_time.split(':').map(Number)
@@ -281,7 +320,6 @@ export function getAllTimeScore(tasks) {
   const uniqueDates = [...new Set(tasks.map((t) => t.date))]
   return +uniqueDates.reduce((sum, d) => sum + getDailyScore(tasks, d), 0).toFixed(1)
 }
-
 export function getSevenDayStats(tasks) {
   const days = []
   for (let i = 6; i >= 0; i--) {
@@ -299,7 +337,6 @@ export function getSevenDayStats(tasks) {
   }
   return days
 }
-
 export function getDifficultyBreakdown(tasks) {
   const done = tasks.filter((t) => t.done)
   const counts = { easy: 0, medium: 0, hard: 0 }
@@ -313,7 +350,6 @@ export function getDifficultyBreakdown(tasks) {
   })
   return { counts, pct, total }
 }
-
 export function getCategoryBreakdown(tasks) {
   const buckets = {}
   tasks.forEach((t) => {
