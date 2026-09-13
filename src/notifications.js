@@ -41,8 +41,14 @@ export async function registerPushSubscription(supabase, userId) {
     const { error: saveError } = await supabase
       .from('push_subscriptions')
       .upsert(
-        { user_id: userId, endpoint, p256dh, auth, updated_at: new Date().toISOString() },
-        { onConflict: 'endpoint' },
+        {
+          user_id: userId,
+          endpoint,
+          p256dh,
+          auth,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,endpoint' },
       )
 
     if (saveError) return { ok: false, reason: saveError.message }
