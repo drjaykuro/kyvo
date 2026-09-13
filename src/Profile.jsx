@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Lock, Check, LogOut, Camera } from 'lucide-react'
+import { Lock, Check, LogOut, Camera, Sun, Moon } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { getStreak, getAllTimeScore, BADGE_TIERS } from './blocksLogic'
@@ -18,54 +18,34 @@ const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 async function compressAvatar(file) {
   const objectUrl = URL.createObjectURL(file)
-
   try {
     const image = new Image()
     image.decoding = 'async'
     image.src = objectUrl
     await image.decode()
-
     const scale = Math.min(1, MAX_AVATAR_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight))
     const width = Math.max(1, Math.round(image.naturalWidth * scale))
     const height = Math.max(1, Math.round(image.naturalHeight * scale))
-
     const canvas = document.createElement('canvas')
     canvas.width = width
     canvas.height = height
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Could not prepare the image for upload.')
-
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
     context.drawImage(image, 0, 0, width, height)
-
     const qualities = [0.82, 0.72, 0.62, 0.52]
     let bestBlob = null
-
     for (const quality of qualities) {
-      const blob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/webp', quality)
-      })
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality))
       if (!blob) continue
       bestBlob = blob
       if (blob.size <= TARGET_AVATAR_SIZE) break
     }
-
-    if (!bestBlob) {
-      bestBlob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/jpeg', 0.78)
-      })
-    }
-
+    if (!bestBlob) bestBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78))
     if (!bestBlob) throw new Error('Could not compress the image. Please try another photo.')
-
-    return new File([bestBlob], 'avatar.webp', {
-      type: bestBlob.type || 'image/webp',
-      lastModified: Date.now(),
-    })
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
+    return new File([bestBlob], 'avatar.webp', { type: bestBlob.type || 'image/webp', lastModified: Date.now() })
+  } finally { URL.revokeObjectURL(objectUrl) }
 }
 
 function Profile({ userId }) {
@@ -81,43 +61,33 @@ function Profile({ userId }) {
   const [feedbackStatus, setFeedbackStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [theme, setTheme] = useState(() => localStorage.getItem('kyvo-theme') || 'dark')
   const avatarInputRef = useRef(null)
 
+  useEffect(() => { loadEverything() }, [userId])
+
   useEffect(() => {
-    loadEverything()
-  }, [userId])
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('kyvo-theme', theme)
+  }, [theme])
 
   async function loadEverything() {
     setLoading(true)
     setError('')
-
-    const [{ data: profileRow, error: profileError }, { data: taskRows, error: tasksError }] =
-      await Promise.all([
-        supabase.from('users').select('*').eq('id', userId).single(),
-        supabase.from('tasks').select('*, subtasks(*)').eq('user_id', userId),
-      ])
-
+    const [{ data: profileRow, error: profileError }, { data: taskRows, error: tasksError }] = await Promise.all([
+      supabase.from('users').select('*').eq('id', userId).single(),
+      supabase.from('tasks').select('*, subtasks(*)').eq('user_id', userId),
+    ])
     if (profileError) setError(profileError.message)
     if (tasksError) setError(tasksError.message)
-
-    if (profileRow) {
-      setProfile(profileRow)
-      setBio(profileRow.bio || '')
-    }
+    if (profileRow) { setProfile(profileRow); setBio(profileRow.bio || '') }
     if (taskRows) setTasks(taskRows)
-
-    const { data: board, error: boardError } = await supabase
-      .from('users')
-      .select('id')
-      .order('level', { ascending: false })
-      .order('xp_score', { ascending: false })
-      .limit(1000)
+    const { data: board, error: boardError } = await supabase.from('users').select('id').order('level', { ascending: false }).order('xp_score', { ascending: false }).limit(1000)
     if (!boardError && board) {
       setLeaderboardSize(board.length)
       const idx = board.findIndex((u) => u.id === userId)
       setOwnRank(idx >= 0 ? idx + 1 : null)
     }
-
     setLoading(false)
   }
 
@@ -125,151 +95,76 @@ function Profile({ userId }) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-
-    if (!AVATAR_TYPES.includes(file.type)) {
-      setError('Please choose a JPG, PNG, WEBP, or GIF image.')
-      return
-    }
-    if (file.size > MAX_AVATAR_SIZE) {
-      setError('Profile pictures must be 10 MB or smaller.')
-      return
-    }
-
-    setAvatarUploading(true)
-    setError('')
-
+    if (!AVATAR_TYPES.includes(file.type)) { setError('Please choose a JPG, PNG, WEBP, or GIF image.'); return }
+    if (file.size > MAX_AVATAR_SIZE) { setError('Profile pictures must be 10 MB or smaller.'); return }
+    setAvatarUploading(true); setError('')
     try {
       const compressedFile = await compressAvatar(file)
       const path = `${userId}/${crypto.randomUUID()}.webp`
-      const { error: uploadError } = await storageClient.storage
-        .from('avatars')
-        .upload(path, compressedFile, {
-          cacheControl: '31536000',
-          contentType: 'image/webp',
-          upsert: false,
-        })
-
+      const { error: uploadError } = await storageClient.storage.from('avatars').upload(path, compressedFile, { cacheControl: '31536000', contentType: 'image/webp', upsert: false })
       if (uploadError) throw uploadError
-
       const { data: publicUrlData } = storageClient.storage.from('avatars').getPublicUrl(path)
       const avatarUrl = publicUrlData.publicUrl
-
-      const { error: profileError } = await supabase
-        .from('users')
-        .update({ avatar_url: avatarUrl })
-        .eq('id', userId)
-
+      const { error: profileError } = await supabase.from('users').update({ avatar_url: avatarUrl }).eq('id', userId)
       if (profileError) throw profileError
-
       const previousUrl = profile?.avatar_url
       setProfile((current) => ({ ...current, avatar_url: avatarUrl }))
-
       if (previousUrl) {
         const marker = '/storage/v1/object/public/avatars/'
         const previousPath = previousUrl.includes(marker) ? previousUrl.split(marker)[1].split('?')[0] : null
-        if (previousPath) {
-          await storageClient.storage.from('avatars').remove([previousPath]).catch(() => {})
-        }
+        if (previousPath) await storageClient.storage.from('avatars').remove([previousPath]).catch(() => {})
       }
-    } catch (avatarError) {
-      setError(avatarError.message || 'Could not update your profile picture. Please try again.')
-    } finally {
-      setAvatarUploading(false)
-    }
+    } catch (avatarError) { setError(avatarError.message || 'Could not update your profile picture. Please try again.') }
+    finally { setAvatarUploading(false) }
   }
 
   async function handleSaveBio() {
-    setBioSaving(true)
-    setBioSaved(false)
+    setBioSaving(true); setBioSaved(false)
     const { error: bioError } = await supabase.from('users').update({ bio }).eq('id', userId)
     setBioSaving(false)
-    if (bioError) {
-      setError(bioError.message)
-      return
-    }
-    setBioSaved(true)
-    setTimeout(() => setBioSaved(false), 2000)
+    if (bioError) { setError(bioError.message); return }
+    setBioSaved(true); setTimeout(() => setBioSaved(false), 2000)
   }
 
   async function handleSubmitFeedback() {
     if (!feedback.trim()) return
     setFeedbackStatus('sending')
-    const { error: fbError } = await supabase
-      .from('feedback')
-      .insert({ user_id: userId, message: feedback.trim() })
-    if (fbError) {
-      setFeedbackStatus('error')
-      setError(fbError.message)
-      return
-    }
-    setFeedback('')
-    setFeedbackStatus('sent')
-    setTimeout(() => setFeedbackStatus(''), 3000)
+    const { error: fbError } = await supabase.from('feedback').insert({ user_id: userId, message: feedback.trim() })
+    if (fbError) { setFeedbackStatus('error'); setError(fbError.message); return }
+    setFeedback(''); setFeedbackStatus('sent'); setTimeout(() => setFeedbackStatus(''), 3000)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-  }
+  async function handleLogout() { await supabase.auth.signOut() }
 
-  if (loading) {
-    return <p className="home-loading">Loading your profile…</p>
-  }
-
-  if (!profile) {
-    return (
-      <div className="home-screen">
-        <h1 className="home-greeting">Profile</h1>
-        <p className="empty-text">Your profile is not available on this device yet. Connect to the internet once to load it.</p>
-        <button className="logout-button" onClick={handleLogout}>
-          <LogOut size={16} />
-          Log out
-        </button>
-      </div>
-    )
-  }
+  if (loading) return <p className="home-loading">Loading your profile…</p>
+  if (!profile) return (
+    <div className="home-screen">
+      <h1 className="home-greeting">Profile</h1>
+      <p className="empty-text">Your profile is not available on this device yet. Connect to the internet once to load it.</p>
+      <button className="logout-button" onClick={handleLogout}><LogOut size={16} /> Log out</button>
+    </div>
+  )
 
   const streak = getStreak(tasks)
   const score = getAllTimeScore(tasks)
-  const initials = (profile.name || '?')
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const initials = (profile.name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
-  // A missed day resets the current streak, but never removes a level already earned.
-  // Use the user's persisted level as the floor, while also recovering a level from
-  // historical completed-task streaks for users who earned it before this rule existed.
   const historicalLevel = (() => {
-    const completedDates = new Set(
-      tasks
-        .filter((task) => task.done && task.date)
-        .map((task) => task.date)
-    )
-
-    let bestRun = 0
-    let run = 0
-    let previousDate = null
+    const completedDates = new Set(tasks.filter((task) => task.done && task.date).map((task) => task.date))
+    let bestRun = 0, run = 0, previousDate = null
     const sortedDates = [...completedDates].sort()
-
     for (const dateString of sortedDates) {
-      if (!previousDate) {
-        run = 1
-      } else {
+      if (!previousDate) run = 1
+      else {
         const previous = new Date(`${previousDate}T00:00:00`)
         const current = new Date(`${dateString}T00:00:00`)
         const diffDays = Math.round((current - previous) / 86400000)
         run = diffDays === 1 ? run + 1 : 1
       }
-      bestRun = Math.max(bestRun, run)
-      previousDate = dateString
+      bestRun = Math.max(bestRun, run); previousDate = dateString
     }
-
     let recoveredLevel = 0
-    for (const [lvl, days] of BADGE_TIERS) {
-      if (bestRun >= days) recoveredLevel = lvl
-      else break
-    }
+    for (const [lvl, days] of BADGE_TIERS) { if (bestRun >= days) recoveredLevel = lvl; else break }
     return recoveredLevel
   })()
 
@@ -278,125 +173,64 @@ function Profile({ userId }) {
 
   return (
     <div className="home-screen">
-      <h1 className="home-greeting">Profile</h1>
-
-      <div style={{ marginTop: '-8px', marginBottom: '22px', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.04em' }}>
-        Built by J Gravity Labs
+      <div className="profile-title-row">
+        <div>
+          <h1 className="home-greeting">Profile</h1>
+          <div className="profile-credit">Built by J Gravity Labs</div>
+        </div>
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
       </div>
 
       {error && <p className="home-error">{error}</p>}
-
       <div className="profile-header">
-        <button
-          type="button"
-          className="avatar-button"
-          onClick={() => avatarInputRef.current?.click()}
-          disabled={avatarUploading}
-          aria-label="Change profile picture"
-        >
+        <button type="button" className="avatar-button" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading} aria-label="Change profile picture">
           <div className="avatar-circle block-3d shine" style={{ '--block-color': 'var(--green)' }}>
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt="Profile" className="avatar-image" />
-            ) : (
-              initials
-            )}
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="Profile" className="avatar-image" /> : initials}
           </div>
           <span className="avatar-camera"><Camera size={14} /></span>
         </button>
-        <input
-          ref={avatarInputRef}
-          className="avatar-file-input"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={handleAvatarChange}
-        />
+        <input ref={avatarInputRef} className="avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} />
         <div>
           <div className="profile-name">{profile.name}</div>
           <div className="profile-username">@{profile.username}</div>
-          <div className="profile-joined">
-            {avatarUploading ? 'Optimizing profile picture…' : `Joined ${profile.signup_date}`}
-          </div>
+          <div className="profile-joined">{avatarUploading ? 'Optimizing profile picture…' : `Joined ${profile.signup_date}`}</div>
         </div>
       </div>
 
       <div className="level-card">
         <div className="level-card-top">
-          <div>
-            <div className="stat-label">CURRENT LEVEL</div>
-            <div className="stat-value">
-              Level {currentLevel} · {currentBadge}
-            </div>
-          </div>
-          <div className="level-card-right">
-            <div className="stat-label">{streak}-day streak</div>
-            <div className="level-progress-text">{score} XP all-time</div>
-          </div>
+          <div><div className="stat-label">CURRENT LEVEL</div><div className="stat-value">Level {currentLevel} · {currentBadge}</div></div>
+          <div className="level-card-right"><div className="stat-label">{streak}-day streak</div><div className="level-progress-text">{score} XP all-time</div></div>
         </div>
-        {ownRank && (
-          <div className="week-rate-line">
-            Ranked #{ownRank} of {leaderboardSize} on the leaderboard
-          </div>
-        )}
+        {ownRank && <div className="week-rate-line">Ranked #{ownRank} of {leaderboardSize} on the leaderboard</div>}
       </div>
 
       <h2 className="section-heading">Badges</h2>
       <div className="badge-list">
         {BADGE_TIERS.map(([lvl, days, name]) => {
           const achieved = currentLevel >= lvl
-          return (
-            <div className={`badge-row${achieved ? ' achieved' : ''}`} key={name}>
-              <div className={`badge-icon${achieved ? ' achieved' : ''}`}>
-                {achieved ? <Check size={16} /> : <Lock size={14} />}
-              </div>
-              <div className="badge-info">
-                <div className="badge-name">{name}</div>
-                <div className="badge-req">{days} day streak</div>
-              </div>
-            </div>
-          )
+          return <div className={`badge-row${achieved ? ' achieved' : ''}`} key={name}><div className={`badge-icon${achieved ? ' achieved' : ''}`}>{achieved ? <Check size={16} /> : <Lock size={14} />}</div><div className="badge-info"><div className="badge-name">{name}</div><div className="badge-req">{days} day streak</div></div></div>
         })}
       </div>
 
       <h2 className="section-heading">About Me</h2>
-      <textarea
-        className="field-input field-textarea"
-        placeholder="Tell people a bit about yourself…"
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-      />
-      <button className="subtasks-toggle" onClick={handleSaveBio} disabled={bioSaving}>
-        {bioSaving ? 'Saving…' : bioSaved ? 'Saved ✓' : 'Save bio'}
-      </button>
+      <textarea className="field-input field-textarea" placeholder="Tell people a bit about yourself…" value={bio} onChange={(e) => setBio(e.target.value)} />
+      <button className="subtasks-toggle" onClick={handleSaveBio} disabled={bioSaving}>{bioSaving ? 'Saving…' : bioSaved ? 'Saved ✓' : 'Save bio'}</button>
 
       <h2 className="section-heading">Feedback</h2>
       <p className="empty-text">Tell us what to add, remove, or improve.</p>
-      <textarea
-        className="field-input field-textarea"
-        placeholder="What would make Blocks better for you?"
-        value={feedback}
-        onChange={(e) => setFeedback(e.target.value)}
-      />
-      <button
-        className="add-task-button shine"
-        onClick={handleSubmitFeedback}
-        disabled={feedbackStatus === 'sending'}
-      >
-        {feedbackStatus === 'sending'
-          ? 'Sending…'
-          : feedbackStatus === 'sent'
-          ? 'Thank you! ✓'
-          : 'Send Feedback'}
-      </button>
-
-      <button className="logout-button" onClick={handleLogout}>
-        <LogOut size={16} />
-        Log out
-      </button>
-
-      <div style={{ textAlign: 'center', padding: '20px 0 8px', color: 'var(--text-dim)' }}>
-        <div style={{ fontSize: 10, marginTop: 3 }}>© 2026 J Gravity Labs</div>
-      </div>
-
+      <textarea className="field-input field-textarea" placeholder="What would make Blocks better for you?" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+      <button className="add-task-button shine" onClick={handleSubmitFeedback} disabled={feedbackStatus === 'sending'}>{feedbackStatus === 'sending' ? 'Sending…' : feedbackStatus === 'sent' ? 'Thank you! ✓' : 'Send Feedback'}</button>
+      <button className="logout-button" onClick={handleLogout}><LogOut size={16} /> Log out</button>
+      <div style={{ textAlign: 'center', padding: '20px 0 8px', color: 'var(--text-dim)' }}><div style={{ fontSize: 10, marginTop: 3 }}>© 2026 J Gravity Labs</div></div>
       <div style={{ height: '80px' }} />
     </div>
   )
