@@ -43,7 +43,7 @@ export function calculateBlockSize(startTime,endTime){const [sh,sm]=startTime.sp
 export function earliestCompletionTime(task){const[y,m,d]=task.date.split('-').map(Number),[sh,sm]=task.start_time.split(':').map(Number),[eh,em]=task.end_time.split(':').map(Number);const start=new Date(y,m-1,d,sh,sm);let end=new Date(y,m-1,d,eh,em);if(end<=start)end=new Date(end.getTime()+86400000);return new Date(end.getTime()-600000)}
 
 // A streak day is earned when at least 75% of that day's scheduled tasks are completed.
-// This keeps KYVO motivating without requiring a perfect day.
+// Missed days pause the streak; they do not erase previously earned streak days.
 function getCompletedDayDates(tasks){
   const byDate=new Map(),today=todayStr()
   for(const task of tasks){if(!task.date||task.date>today)continue;if(!byDate.has(task.date))byDate.set(task.date,[]);byDate.get(task.date).push(task)}
@@ -55,19 +55,23 @@ export function getHistoricalBestStreak(tasks){
   for(const dateStr of dates){if(previous){const[y,m,d]=previous.split('-').map(Number),next=new Date(y,m-1,d);next.setDate(next.getDate()+1);run=toDateStr(next)===dateStr?run+1:1}else run=1;best=Math.max(best,run);previous=dateStr}return best
 }
 export function getStreak(tasks){
-  let streak=0,currentDay=new Date(),todayString=todayStr()
-  while(true){const dayStr=toDateStr(currentDay),dayTasks=tasks.filter(t=>t.date===dayStr)
-    if(dayTasks.length===0){if(dayStr===todayString){currentDay=new Date(currentDay.getTime()-86400000);continue}break}
-    const completedCount=dayTasks.filter(t=>t.done).length,completionRate=completedCount/dayTasks.length
-    if(completionRate>=0.75){streak+=1;currentDay=new Date(currentDay.getTime()-86400000)}
-    else if(dayStr===todayString){currentDay=new Date(currentDay.getTime()-86400000);continue}
-    else break
-  }
-  const historicalBest=getHistoricalBestStreak(tasks);let checkpoint=0
-  for(const[,daysRequired]of BADGE_TIERS){if(historicalBest>=daysRequired)checkpoint=daysRequired;else break}
-  return Math.max(streak,checkpoint)
+  const completedDates=getCompletedDayDates(tasks)
+  if(completedDates.size===0)return 0
+
+  // KYVO uses a pause-and-continue streak: every qualifying active day adds
+  // one day to the streak, while missed days do not subtract from it.
+  // Keep the historical consecutive run as a safeguard for older data.
+  return Math.max(completedDates.size, getHistoricalBestStreak(tasks))
 }
-export function getLevelAndBadge(tasks,storedLevel=0){const streak=getStreak(tasks),historicalBest=getHistoricalBestStreak(tasks);let earnedLevel=0,earnedBadge='No badge yet';for(const[lvl,daysRequired,badgeName]of BADGE_TIERS){if(historicalBest>=daysRequired){earnedLevel=lvl;earnedBadge=badgeName}else break}const level=Math.max(Number(storedLevel)||0,earnedLevel),badge=level>0?BADGE_TIERS[level-1][2]:earnedBadge;return{level,badge,streak}}
+export function getLevelAndBadge(tasks,storedLevel=0){
+  const streak=getStreak(tasks)
+  let earnedLevel=0,earnedBadge='No badge yet'
+  for(const[lvl,daysRequired,badgeName]of BADGE_TIERS){
+    if(streak>=daysRequired){earnedLevel=lvl;earnedBadge=badgeName}else break
+  }
+  const level=Math.max(Number(storedLevel)||0,earnedLevel),badge=level>0?BADGE_TIERS[level-1][2]:earnedBadge
+  return{level,badge,streak}
+}
 export function getLevelProgress(streak,level){if(level>=BADGE_TIERS.length)return 100;const lo=level===0?0:BADGE_TIERS[level-1][1],hi=BADGE_TIERS[level][1],pct=((streak-lo)/(hi-lo))*100;return Math.min(100,Math.max(0,Math.round(pct)))}
 export function getDailyScore(tasks,dayStr){const dayTasks=tasks.filter(t=>t.date===dayStr);let total=0;for(const task of dayTasks){const points=SIZE_POINTS[task.size]??1,multiplier=DIFFICULTY_MULTIPLIER[task.difficulty]??1,maxPoints=points*multiplier;if(task.subtasks&&task.subtasks.length>0){const completed=task.subtasks.filter(s=>s.done).length;total+=maxPoints*(completed/task.subtasks.length)}else if(task.done)total+=maxPoints}return total}
 export function getMotivationalQuote(){return MOTIVATIONAL_QUOTES[Math.floor(Math.random()*MOTIVATIONAL_QUOTES.length)]}
