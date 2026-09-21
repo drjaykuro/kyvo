@@ -43,34 +43,143 @@ export function calculateBlockSize(startTime,endTime){const [sh,sm]=startTime.sp
 export function earliestCompletionTime(task){const[y,m,d]=task.date.split('-').map(Number),[sh,sm]=task.start_time.split(':').map(Number),[eh,em]=task.end_time.split(':').map(Number);const start=new Date(y,m-1,d,sh,sm);let end=new Date(y,m-1,d,eh,em);if(end<=start)end=new Date(end.getTime()+86400000);return new Date(end.getTime()-600000)}
 
 // A streak day is earned when at least 75% of that day's scheduled tasks are completed.
-// Missed days pause the streak; they do not erase previously earned streak days.
+// KYVO streaks are checkpoint-based:
+//   1) Consecutive qualifying days build the active streak.
+//   2) Reaching a badge milestone permanently secures that checkpoint.
+//   3) A later missed day breaks the active run, but the user falls back to the
+//      highest secured checkpoint instead of going back to zero.
+//   4) After the checkpoint, a new active run builds on top of that checkpoint.
+//
+// Example: 7 consecutive days -> checkpoint 7. Miss 2 days -> 7.
+// Complete 3 more qualifying days -> 10. Reach 14 -> checkpoint 14.
 function getCompletedDayDates(tasks){
   const byDate=new Map(),today=todayStr()
-  for(const task of tasks){if(!task.date||task.date>today)continue;if(!byDate.has(task.date))byDate.set(task.date,[]);byDate.get(task.date).push(task)}
-  return new Set([...byDate.entries()].filter(([,dayTasks])=>{const completed=dayTasks.filter(task=>task.done).length;return dayTasks.length>0&&completed/dayTasks.length>=0.75}).map(([date])=>date))
+  for(const task of tasks){
+    if(!task.date||task.date>today)continue
+    if(!byDate.has(task.date))byDate.set(task.date,[])
+    byDate.get(task.date).push(task)
+  }
+  return new Set(
+    [...byDate.entries()]
+      .filter(([,dayTasks])=>{
+        const completed=dayTasks.filter(task=>task.done).length
+        return dayTasks.length>0&&completed/dayTasks.length>=0.75
+      })
+      .map(([date])=>date)
+  )
 }
+
+function getRuns(completedDates){
+  const dates=[...completedDates].sort()
+  const runs=[]
+  let start=null,previous=null
+  for(const dateStr of dates){
+    if(!start){
+      start=dateStr
+      previous=dateStr
+      continue
+    }
+    const [y,m,d]=previous.split('-').map(Number)
+    const next=new Date(y,m-1,d)
+    next.setDate(next.getDate()+1)
+    if(toDateStr(next)!==dateStr){
+      runs.push({start,end:previous,length:daysBetween(start,previous)+1})
+      start=dateStr
+    }
+    previous=dateStr
+  }
+  if(start)runs.push({start,end:previous,length:daysBetween(start,previous)+1})
+  return runs
+}
+
+function daysBetween(startStr,endStr){
+  const [sy,sm,sd]=startStr.split('-').map(Number)
+  const [ey,em,ed]=endStr.split('-').map(Number)
+  const start=new Date(sy,sm-1,sd)
+  const end=new Date(ey,em-1,ed)
+  return Math.round((end-start)/86400000)
+}
+
+function milestoneDateForRun(run,daysRequired){
+  if(run.length<daysRequired)return null
+  const [y,m,d]=run.start.split('-').map(Number)
+  const date=new Date(y,m-1,d)
+  date.setDate(date.getDate()+daysRequired-1)
+  return toDateStr(date)
+}
+
 export function getHistoricalBestStreak(tasks){
-  const completedDates=getCompletedDayDates(tasks);if(completedDates.size===0)return 0
-  const dates=[...completedDates].sort();let best=0,run=0,previous=null
-  for(const dateStr of dates){if(previous){const[y,m,d]=previous.split('-').map(Number),next=new Date(y,m-1,d);next.setDate(next.getDate()+1);run=toDateStr(next)===dateStr?run+1:1}else run=1;best=Math.max(best,run);previous=dateStr}return best
+  const completedDates=getCompletedDayDates(tasks)
+  if(completedDates.size===0)return 0
+  return Math.max(...getRuns(completedDates).map(run=>run.length))
 }
+
+function getCheckpoint(tasks){
+  const completedDates=getCompletedDayDates(tasks)
+  if(completedDates.size===0)return {days:0,date:null}
+
+  let checkpointDays=0
+  let checkpointDate=null
+  for(const run of getRuns(completedDates)){
+    for(const [,daysRequired] of BADGE_TIERS){
+      if(run.length>=daysRequired && daysRequired>=checkpointDays){
+        checkpointDays=daysRequired
+        checkpointDate=milestoneDateForRun(run,daysRequired)
+      }
+    }
+  }
+  return {days:checkpointDays,date:checkpointDate}
+}
+
+function getActiveRun(completedDates){
+  if(completedDates.size===0)return null
+  const dates=[...completedDates].sort()
+  const latest=dates[dates.length-1]
+  const today=todayStr()
+  const gapFromToday=daysBetween(latest,today)
+  // A run only remains active through today or yesterday. Older runs are
+  // historical and therefore contribute only through their secured checkpoint.
+  if(gapFromToday>1)return null
+
+  let start=latest
+  let current=latest
+  let length=1
+  while(true){
+    const [y,m,d]=start.split('-').map(Number)
+    const previous=new Date(y,m-1,d)
+    previous.setDate(previous.getDate()-1)
+    const previousStr=toDateStr(previous)
+    if(!completedDates.has(previousStr))break
+    start=previousStr
+    length+=1
+  }
+  return {start,end:current,length}
+}
+
 export function getStreak(tasks){
   const completedDates=getCompletedDayDates(tasks)
   if(completedDates.size===0)return 0
 
-  // KYVO uses a pause-and-continue streak: every qualifying active day adds
-  // one day to the streak, while missed days do not subtract from it.
-  // Keep the historical consecutive run as a safeguard for older data.
-  return Math.max(completedDates.size, getHistoricalBestStreak(tasks))
-}
-export function getLevelAndBadge(tasks,storedLevel=0){
-  const streak=getStreak(tasks)
-  let earnedLevel=0,earnedBadge='No badge yet'
-  for(const[lvl,daysRequired,badgeName]of BADGE_TIERS){
-    if(streak>=daysRequired){earnedLevel=lvl;earnedBadge=badgeName}else break
+  const checkpoint=getCheckpoint(tasks)
+  const activeRun=getActiveRun(completedDates)
+  if(!activeRun)return checkpoint.days
+
+  // If the secured milestone belongs to this active run, count from that
+  // milestone forward. Otherwise this is a new run built on the checkpoint.
+  if(checkpoint.date && daysBetween(activeRun.start,checkpoint.date)>=0 && daysBetween(checkpoint.date,activeRun.end)>=0){
+    return checkpoint.days+daysBetween(checkpoint.date,activeRun.end)
   }
-  const level=Math.max(Number(storedLevel)||0,earnedLevel),badge=level>0?BADGE_TIERS[level-1][2]:earnedBadge
-  return{level,badge,streak}
+  return checkpoint.days+activeRun.length
+}
+
+export function getLevelAndBadge(tasks,storedLevel=0){
+  const checkpoint=getCheckpoint(tasks)
+  const earnedLevel=checkpoint.days===0
+    ? 0
+    : Math.max(...BADGE_TIERS.filter(([,daysRequired])=>daysRequired<=checkpoint.days).map(([lvl])=>lvl))
+  const level=Math.max(Number(storedLevel)||0,earnedLevel)
+  const badge=level>0?BADGE_TIERS[level-1][2]:'No badge yet'
+  return{level,badge,streak:getStreak(tasks)}
 }
 export function getLevelProgress(streak,level){if(level>=BADGE_TIERS.length)return 100;const lo=level===0?0:BADGE_TIERS[level-1][1],hi=BADGE_TIERS[level][1],pct=((streak-lo)/(hi-lo))*100;return Math.min(100,Math.max(0,Math.round(pct)))}
 export function getDailyScore(tasks,dayStr){const dayTasks=tasks.filter(t=>t.date===dayStr);let total=0;for(const task of dayTasks){const points=SIZE_POINTS[task.size]??1,multiplier=DIFFICULTY_MULTIPLIER[task.difficulty]??1,maxPoints=points*multiplier;if(task.subtasks&&task.subtasks.length>0){const completed=task.subtasks.filter(s=>s.done).length;total+=maxPoints*(completed/task.subtasks.length)}else if(task.done)total+=maxPoints}return total}
