@@ -88,10 +88,8 @@ function Progress({ userId }) {
     // so previously earned levels can recover even if an older app version
     // accidentally overwrote the profile level after a missed day.
     const score = getAllTimeScore(loadedTasks)
-    const historicalLevel = getHighestHistoricalLevel(loadedTasks)
     const storedLevel = Number(profile?.level) || 0
-    const permanentLevel = Math.max(storedLevel, historicalLevel)
-    const { level } = getLevelAndBadge(loadedTasks, permanentLevel)
+    const { level } = getLevelAndBadge(loadedTasks, storedLevel)
     await supabase.from('users').update({ xp_score: score, level }).eq('id', userId)
 
     const { data: board, error: boardError } = await supabase
@@ -111,9 +109,8 @@ function Progress({ userId }) {
   }
 
   const storedLevel = (() => {
-    const historicalLevel = getHighestHistoricalLevel(tasks)
     const currentLevel = getLevelAndBadge(tasks).level
-    return Math.max(historicalLevel, currentLevel)
+    return currentLevel
   })()
   const { level, badge, streak } = getLevelAndBadge(tasks, storedLevel)
   const levelProgress = getLevelProgress(streak, level)
