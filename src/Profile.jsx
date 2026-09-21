@@ -149,24 +149,7 @@ function Profile({ userId }) {
   const score = getAllTimeScore(tasks)
   const initials = (profile.name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
-  const historicalLevel = (() => {
-    const completedDates = new Set(tasks.filter((task) => task.done && task.date).map((task) => task.date))
-    let bestRun = 0, run = 0, previousDate = null
-    const sortedDates = [...completedDates].sort()
-    for (const dateString of sortedDates) {
-      if (!previousDate) run = 1
-      else {
-        const previous = new Date(`${previousDate}T00:00:00`)
-        const current = new Date(`${dateString}T00:00:00`)
-        const diffDays = Math.round((current - previous) / 86400000)
-        run = diffDays === 1 ? run + 1 : 1
-      }
-      bestRun = Math.max(bestRun, run); previousDate = dateString
-    }
-    let recoveredLevel = 0
-    for (const [lvl, days] of BADGE_TIERS) { if (bestRun >= days) recoveredLevel = lvl; else break }
-    return recoveredLevel
-  })()
+  const currentLevel = Math.max(Number(profile.level) || 0, getLevelAndBadge(tasks).level)
 
   const currentLevel = Math.max(Number(profile.level) || 0, historicalLevel)
   const currentBadge = BADGE_TIERS.find(([lvl]) => lvl === currentLevel)?.[2] || 'No badge yet'
