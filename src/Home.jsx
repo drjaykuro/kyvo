@@ -70,18 +70,24 @@ function Home({ userId, onAddTask }) {
 
     let loadedTasks = taskRows || []
     const toCreate = getMissingRecurringInstances(loadedTasks)
-    if (toCreate.length > 0) {
-      const { data: inserted, error: recurError } = await supabase
-        .from('tasks')
-        .insert(toCreate)
-        .select('*, subtasks(*)')
-      if (!recurError && inserted) {
-        loadedTasks = [...loadedTasks, ...inserted]
-      }
-    }
     setTasks(loadedTasks)
     if (goalRows) setGoals(goalRows)
     setLoading(false)
+
+    // Recurring instances are useful background maintenance, but they should
+    // never delay the first Home render.
+    if (toCreate.length > 0) {
+      supabase
+        .from('tasks')
+        .insert(toCreate)
+        .select('*, subtasks(*)')
+        .then(({ data: inserted, error: recurError }) => {
+          if (!recurError && inserted) {
+            setTasks((current) => [...current, ...inserted])
+          }
+        })
+        .catch(() => {})
+    }
   }
 
   function shiftDay(delta) {
