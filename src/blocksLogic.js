@@ -184,6 +184,14 @@ export function getLevelAndBadge(tasks,storedLevel=0){
 }
 export function getLevelProgress(streak,level){if(level>=BADGE_TIERS.length)return 100;const lo=level===0?0:BADGE_TIERS[level-1][1],hi=BADGE_TIERS[level][1],pct=((streak-lo)/(hi-lo))*100;return Math.min(100,Math.max(0,Math.round(pct)))}
 export function getSubtaskWeight(subtask){return SUBTASK_DIFFICULTY_WEIGHT[subtask?.difficulty]??SUBTASK_DIFFICULTY_WEIGHT.medium}
+export function getTaskMaxScore(task){return (SIZE_POINTS[task?.size]??1)*(DIFFICULTY_MULTIPLIER[task?.difficulty]??1)}
+export function getSubtaskContribution(task,subtask){
+  const subtasks=task?.subtasks||[]
+  const totalWeight=subtasks.reduce((sum,s)=>sum+getSubtaskWeight(s),0)
+  if(!totalWeight)return {score:0,taskPercent:0}
+  const share=getSubtaskWeight(subtask)/totalWeight
+  return {score:+(getTaskMaxScore(task)*share).toFixed(2),taskPercent:Math.round(share*100)}
+}
 export function getTaskProgress(task){
   const subtasks=task?.subtasks||[]
   if(subtasks.length===0)return task?.done?1:0
