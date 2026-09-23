@@ -232,7 +232,11 @@ class OfflineQuery {
           if (this.limitValue != null) query = query.limit(this.limitValue)
           if (this.singleResult) query = query.maybeSingle()
           const result = await query
-          if (!result.error) await cache(this.table, Array.isArray(result.data) ? result.data : (result.data ? [result.data] : []))
+          if (!result.error) {
+            // Do not block the UI on IndexedDB writes. Fresh network data can render
+            // immediately while the offline cache is updated in the background.
+            cache(this.table, Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])).catch(() => {})
+          }
           return result
         } catch (error) {
           if (!networkError(error)) return { data: null, error }
