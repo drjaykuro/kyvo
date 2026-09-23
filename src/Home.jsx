@@ -175,31 +175,35 @@ function Home({ userId, onAddTask }) {
   }
 
   async function handleMarkDone(task) {
-    if (task.done) return
+    setError('')
+    if (task.done) {
+      const { error: undoError } = await supabase.from('tasks')
+        .update({ done: false, actual_end_time: null, actual_duration_minutes: null })
+        .eq('id', task.id).eq('user_id', userId)
+      if (undoError) { setError(undoError.message); return }
+      setTasks((prev) => prev.map((t) => t.id === task.id
+        ? { ...t, done: false, actual_end_time: null, actual_duration_minutes: null } : t))
+      return
+    }
     const allowedFrom = earliestCompletionTime(task)
     if (new Date() < allowedFrom) {
-      setError(
-        `Too early to mark this done — you can complete it starting at ${allowedFrom
-          .toTimeString()
-          .slice(0, 5)} (10 minutes before it ends).`
-      )
+      setError(`Too early to mark this done — you can complete it starting at ${allowedFrom.toTimeString().slice(0, 5)} (10 minutes before it ends).`)
       return
     }
-    setError('')
+    const rawMinutes = window.prompt('How many minutes did this task actually take?', task.actual_duration_minutes ?? '')
+    if (rawMinutes === null) return
+    const actualDuration = Number(rawMinutes)
+    if (!Number.isFinite(actualDuration) || actualDuration < 1 || actualDuration > 1440) {
+      setError('Enter the actual time spent in minutes (1–1440).')
+      return
+    }
     const actualEndTime = new Date().toTimeString().slice(0, 5)
-    const { error: updateError } = await supabase
-      .from('tasks')
-      .update({ done: true, actual_end_time: actualEndTime })
-      .eq('id', task.id)
-
-    if (updateError) {
-      setError(updateError.message)
-      return
-    }
-
-    setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, done: true, actual_end_time: actualEndTime } : t))
-    )
+    const { error: updateError } = await supabase.from('tasks')
+      .update({ done: true, actual_end_time: actualEndTime, actual_duration_minutes: Math.round(actualDuration) })
+      .eq('id', task.id).eq('user_id', userId)
+    if (updateError) { setError(updateError.message); return }
+    setTasks((prev) => prev.map((t) => t.id === task.id
+      ? { ...t, done: true, actual_end_time: actualEndTime, actual_duration_minutes: Math.round(actualDuration) } : t))
   }
 
   async function handleMarkSubtaskDone(task, subtask) {
@@ -216,19 +220,7 @@ function Home({ userId, onAddTask }) {
       return
     }
     const updatedSubtasks = task.subtasks.map((s) => (s.id === subtask.id ? { ...s, done: true } : s))
-    const allDone = updatedSubtasks.every((s) => s.done)
-    let updatedTask = { ...task, subtasks: updatedSubtasks }
-    if (allDone && !task.done) {
-      const allowedFrom = earliestCompletionTime(task)
-      if (new Date() >= allowedFrom) {
-        const actualEndTime = new Date().toTimeString().slice(0, 5)
-        await supabase
-          .from('tasks')
-          .update({ done: true, actual_end_time: actualEndTime })
-          .eq('id', task.id)
-        updatedTask = { ...updatedTask, done: true, actual_end_time: actualEndTime }
-      }
-    }
+    const updatedTask = { ...task, subtasks: updatedSubtasks }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? updatedTask : t)))
   }
 
@@ -412,6 +404,7 @@ function Home({ userId, onAddTask }) {
           const sizeLabel = SIZE_LABEL[task.size] || task.size
           const subtasksDone = (task.subtasks || []).filter((s) => s.done).length
           const subtasksTotal = (task.subtasks || []).length
+          const subtaskPercent = subtasksTotal ? Math.round((subtasksDone / subtasksTotal) * 100) : 0
           const isOpen = !!openSubtasks[task.id]
           return (
             <div className="task-card" key={task.id}>
@@ -419,15 +412,14 @@ function Home({ userId, onAddTask }) {
                 <button
                   className={`task-checkbox${task.done ? ' checked' : ''}`}
                   onClick={() => handleMarkDone(task)}
-                  disabled={task.done}
-                  aria-label={`Mark ${task.name} done`}
+                  aria-label={task.done ? `Undo ${task.name} completion` : `Mark ${task.name} done`}
                 >
                   {task.done && '✓'}
                 </button>
                 <div className="task-info">
                   <div className={`task-name${task.done ? ' done' : ''}`}>{task.name}</div>
                   <div className="task-meta">
-                    {task.start_time}–{task.end_time} · {task.category}
+                    {task.start_time}–{task.end_time} · {task.category}{task.done && task.actual_duration_minutes ? ` · Actual: ${task.actual_duration_minutes} min` : ''}
                   </div>
                 </div>
 
@@ -460,9 +452,17 @@ function Home({ userId, onAddTask }) {
                 onClick={() => setOpenSubtasks((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
               >
                 {subtasksTotal > 0
-                  ? `Subtasks (${subtasksDone}/${subtasksTotal}) ${isOpen ? '▲' : '▼'}`
+                  ? `Subtasks (${subtasksDone}/${subtasksTotal}) · ${subtaskPercent}% ${isOpen ? '▲' : '▼'}`
                   : `+ Add subtasks ${isOpen ? '▲' : '▼'}`}
               </button>
+              {subtasksTotal > 0 && (
+                <div style={{ marginTop: '8px', fontSize: '12px', opacity: 0.75 }}>
+                  Progress: {subtaskPercent}% complete
+                  <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.12)', marginTop: '5px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${subtaskPercent}%`, background: 'var(--green)', borderRadius: '999px' }} />
+                  </div>
+                </div>
+              )}
               {isOpen && (
                 <div className="subtasks-panel">
                   {(task.subtasks || []).map((sub) => (
