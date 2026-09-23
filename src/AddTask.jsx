@@ -18,6 +18,7 @@ const DIFFICULTIES = [
 const RECURRING_OPTIONS = [
   { key: null, label: 'None', icon: Ban }, { key: 'daily', label: 'Daily', icon: RotateCw },
   { key: 'weekly', label: 'Weekly', icon: CalendarDays },
+  { key: 'custom', label: 'Custom', icon: CalendarDays },
 ]
 const SIZE_COLOR_VAR = {
   Small: 'var(--size-small)', Medium: 'var(--size-medium)', Large: 'var(--size-large)', Giant: 'var(--size-giant)',
