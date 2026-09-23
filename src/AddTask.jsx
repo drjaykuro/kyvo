@@ -31,11 +31,19 @@ function AddTask({ userId, onBack, onDone }) {
   const [category, setCategory] = useState('other')
   const [difficulty, setDifficulty] = useState('medium')
   const [recurring, setRecurring] = useState(null)
+  const [customMode, setCustomMode] = useState('interval')
+  const [customInterval, setCustomInterval] = useState(2)
+  const [customDays, setCustomDays] = useState([])
+  const [customMonthDay, setCustomMonthDay] = useState(15)
   const [subtaskDraft, setSubtaskDraft] = useState('')
   const [subtasks, setSubtasks] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const WEEKDAYS = [
+    { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' }, { value: 5, label: 'Fri' }, { value: 6, label: 'Sat' }, { value: 0, label: 'Sun' },
+  ]
   const previewValid = startTime && endTime
   const previewSize = previewValid ? calculateBlockSize(startTime, endTime) : null
   const previewXp = previewSize
@@ -59,11 +67,22 @@ function AddTask({ userId, onBack, onDone }) {
 
     const size = calculateBlockSize(startTime, endTime)
     const color = CATEGORY_COLORS[category] || 'white'
+    let recurrenceValue = recurring
+    if (recurring === 'custom') {
+      if (customMode === 'weekly' && customDays.length === 0) { setError('Choose at least one day of the week.'); setSaving(false); return }
+      recurrenceValue = JSON.stringify({
+        type: 'custom',
+        mode: customMode,
+        ...(customMode === 'interval' ? { interval: Math.max(1, Number(customInterval) || 1) } : {}),
+        ...(customMode === 'weekly' ? { days: customDays } : {}),
+        ...(customMode === 'monthly' ? { day: Math.min(31, Math.max(1, Number(customMonthDay) || 1)) } : {}),
+      })
+    }
     const { data: newTask, error: insertError } = await supabase
       .from('tasks')
       .insert({
         user_id: userId, name: name.trim(), done: false, date: taskDate,
-        start_time: startTime, end_time: endTime, recurring, category, color, size, difficulty,
+        start_time: startTime, end_time: endTime, recurring: recurrenceValue, category, color, size, difficulty,
         miss_reason: null, actual_end_time: null,
       })
       .select().single()
@@ -131,6 +150,50 @@ function AddTask({ userId, onBack, onDone }) {
         ))}
       </div>
       <p className="selection-caption">Repeat: {RECURRING_OPTIONS.find((r) => r.key === recurring)?.label}</p>
+      {recurring === 'custom' && (
+        <div className="task-card" style={{ marginTop: '8px' }}>
+          <span className="field-label">Custom repetition</span>
+          <div className="icon-grid">
+            {[
+              ['interval', 'Every X days'],
+              ['weekly', 'Selected weekdays'],
+              ['monthly', 'Day of month'],
+            ].map(([mode, label]) => (
+              <button key={mode} type="button" className={`icon-choice wide${customMode === mode ? ' active' : ''}`} onClick={() => setCustomMode(mode)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {customMode === 'interval' && (
+            <div>
+              <label className="field-label" htmlFor="repeat-interval">Repeat every</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input id="repeat-interval" type="number" min="1" max="365" className="field-input" value={customInterval} onChange={(e) => setCustomInterval(e.target.value)} />
+                <span>days</span>
+              </div>
+            </div>
+          )}
+          {customMode === 'weekly' && (
+            <div>
+              <span className="field-label">Days</span>
+              <div className="icon-grid">
+                {WEEKDAYS.map((day) => (
+                  <button key={day.value} type="button" className={`icon-choice wide${customDays.includes(day.value) ? ' active' : ''}`} onClick={() => setCustomDays((prev) => prev.includes(day.value) ? prev.filter((d) => d !== day.value) : [...prev, day.value])}>
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {customMode === 'monthly' && (
+            <div>
+              <label className="field-label" htmlFor="repeat-month-day">Day of month</label>
+              <input id="repeat-month-day" type="number" min="1" max="31" className="field-input" value={customMonthDay} onChange={(e) => setCustomMonthDay(e.target.value)} />
+              <p className="selection-caption">If a month has fewer days, KYVO uses that month's last day.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {previewValid && (
         <div className="preview-card">
