@@ -312,9 +312,6 @@ function Home({ userId, onAddTask }) {
   const todayTasksForStats = tasks.filter((t) => t.date === today)
   const completedToday = todayTasksForStats.filter((t) => t.done).length
   const todayPct = getDailyProgress(tasks, today)
-  const blocksToday =
-    completedToday +
-    todayTasksForStats.reduce((sum, t) => sum + (t.subtasks || []).filter((s) => s.done).length, 0)
   const { level, badge, streak } = getLevelAndBadge(tasks)
   const levelProgress = getLevelProgress(streak, level)
   const xpToday = getDailyScore(tasks, today)
@@ -369,10 +366,6 @@ function Home({ userId, onAddTask }) {
         <div className="stat-card">
           <div className="stat-value small">{xpToday.toFixed(1)}</div>
           <div className="stat-label">XP Today</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value small">{blocksToday}</div>
-          <div className="stat-label">Blocks Today</div>
         </div>
       </div>
       <div className="day-nav">
@@ -477,7 +470,7 @@ function Home({ userId, onAddTask }) {
                       </span>
                       <span className={`subtask-difficulty ${sub.difficulty || 'medium'}`}>{sub.difficulty || 'medium'}</span>
                       <span className="subtask-reward">
-                        +{getSubtaskContribution(task, sub).score} XP · {getSubtaskContribution(task, sub).taskPercent}%
+                        +{getSubtaskContribution(task, sub).score} / {getTaskMaxScore(task)} XP · {getSubtaskContribution(task, sub).taskPercent}% of task
                       </span>
                     </div>
                   ))}
