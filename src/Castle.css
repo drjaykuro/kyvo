@@ -45,3 +45,75 @@
   height: 22px;
   border-radius: 4px;
 }
+.castle-hero {
+  text-align: center;
+  padding: 12px 0 8px;
+}
+.castle-icon {
+  font-size: 86px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.castle-title {
+  font-family: var(--font-display);
+  font-size: 25px;
+  margin: 0;
+}
+.castle-total {
+  font-size: 34px;
+  font-weight: 800;
+  margin-top: 10px;
+  color: var(--text);
+}
+.castle-total-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+}
+.castle-block-counts {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 14px 4px 18px;
+  margin-bottom: 6px;
+  justify-content: center;
+  border-bottom: 1px solid var(--card-border);
+}
+.castle-count {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.castle-count-label {
+  font-weight: 700;
+}
+.castle-count-number {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.subtask-difficulty {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  opacity: .85;
+}
+.subtask-difficulty.easy { color: var(--green); }
+.subtask-difficulty.medium { color: var(--size-medium); }
+.subtask-difficulty.hard { color: var(--size-large); }
+.subtask-difficulty-select {
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 6px;
+  color: var(--text);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+@media (max-width: 420px) {
+  .castle-block-counts { justify-content: flex-start; }
+}
