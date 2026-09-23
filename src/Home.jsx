@@ -9,7 +9,6 @@ import {
   getDailyProgress,
   getTaskProgressPercent,
   getSubtaskContribution,
-  getTaskMaxScore,
   getDailyQuote,
   goalAchievedMessage,
   getMissingRecurringInstances,
