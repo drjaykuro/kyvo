@@ -13,6 +13,7 @@ export const CATEGORY_COLORS = {
 }
 export const SIZE_POINTS = { Small: 1, Medium: 2.3, Large: 3.5, Giant: 5 }
 export const DIFFICULTY_MULTIPLIER = { easy: 1, medium: 1.5, hard: 2 }
+export const SUBTASK_DIFFICULTY_WEIGHT = { easy: 1, medium: 1.5, hard: 2 }
 export const BADGE_TIERS = [
   [1, 7, 'Foundation Block I'], [2, 14, 'Foundation Block II'], [3, 28, 'Foundation Block III'],
   [4, 60, 'Builder I'], [5, 90, 'Builder II'], [6, 150, 'Builder III'],
@@ -182,7 +183,32 @@ export function getLevelAndBadge(tasks,storedLevel=0){
   return{level,badge,streak:getStreak(tasks)}
 }
 export function getLevelProgress(streak,level){if(level>=BADGE_TIERS.length)return 100;const lo=level===0?0:BADGE_TIERS[level-1][1],hi=BADGE_TIERS[level][1],pct=((streak-lo)/(hi-lo))*100;return Math.min(100,Math.max(0,Math.round(pct)))}
-export function getDailyScore(tasks,dayStr){const dayTasks=tasks.filter(t=>t.date===dayStr);let total=0;for(const task of dayTasks){const points=SIZE_POINTS[task.size]??1,multiplier=DIFFICULTY_MULTIPLIER[task.difficulty]??1,maxPoints=points*multiplier;if(task.subtasks&&task.subtasks.length>0){const completed=task.subtasks.filter(s=>s.done).length;total+=maxPoints*(completed/task.subtasks.length)}else if(task.done)total+=maxPoints}return total}
+export function getSubtaskWeight(subtask){return SUBTASK_DIFFICULTY_WEIGHT[subtask?.difficulty]??SUBTASK_DIFFICULTY_WEIGHT.medium}
+export function getTaskProgress(task){
+  const subtasks=task?.subtasks||[]
+  if(subtasks.length===0)return task?.done?1:0
+  const totalWeight=subtasks.reduce((sum,s)=>sum+getSubtaskWeight(s),0)
+  if(!totalWeight)return 0
+  return subtasks.reduce((sum,s)=>sum+(s.done?getSubtaskWeight(s):0),0)/totalWeight
+}
+export function getTaskProgressPercent(task){return Math.round(getTaskProgress(task)*100)}
+export function getDailyProgress(tasks,dayStr){
+  const dayTasks=tasks.filter(t=>t.date===dayStr)
+  if(dayTasks.length===0)return 0
+  const share=1/dayTasks.length
+  return Math.round(dayTasks.reduce((sum,task)=>sum+getTaskProgress(task)*share,0)*100)
+}
+export function getDailyScore(tasks,dayStr){
+  const dayTasks=tasks.filter(t=>t.date===dayStr)
+  let total=0
+  for(const task of dayTasks){
+    const points=SIZE_POINTS[task.size]??1
+    const multiplier=DIFFICULTY_MULTIPLIER[task.difficulty]??1
+    const maxPoints=points*multiplier
+    total+=maxPoints*getTaskProgress(task)
+  }
+  return total
+}
 export function getMotivationalQuote(){return MOTIVATIONAL_QUOTES[Math.floor(Math.random()*MOTIVATIONAL_QUOTES.length)]}
 export function getScheduledQuote(){const hour=new Date().getHours();if(hour===7)return`Good morning! ${getMotivationalQuote()}`;if(hour===21)return`Good night! ${getMotivationalQuote()}`;return null}
 export function getDailyQuote(){const key=`blocks_daily_quote_${todayStr()}`,cached=localStorage.getItem(key);if(cached)return cached;const quote=getScheduledQuote()||getMotivationalQuote();localStorage.setItem(key,quote);return quote}
