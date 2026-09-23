@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Lock, Check, LogOut, Camera, Sun, Moon } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
-import { getStreak, getAllTimeScore, BADGE_TIERS } from './blocksLogic'
+import { getStreak, getAllTimeScore, getLevelAndBadge, BADGE_TIERS } from './blocksLogic'
 import './Home.css'
 import './Profile.css'
 
@@ -149,10 +149,7 @@ function Profile({ userId }) {
   const score = getAllTimeScore(tasks)
   const initials = (profile.name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
-  const currentLevel = Math.max(Number(profile.level) || 0, getLevelAndBadge(tasks).level)
-
-  const currentLevel = Math.max(Number(profile.level) || 0, historicalLevel)
-  const currentBadge = BADGE_TIERS.find(([lvl]) => lvl === currentLevel)?.[2] || 'No badge yet'
+  const { level: currentLevel, badge: currentBadge } = getLevelAndBadge(tasks, profile.level)
 
   return (
     <div className="home-screen">
