@@ -37,6 +37,7 @@ function AddTask({ userId, onBack, onDone }) {
   const [customDays, setCustomDays] = useState([])
   const [customMonthDay, setCustomMonthDay] = useState(15)
   const [subtaskDraft, setSubtaskDraft] = useState('')
+  const [subtaskDifficulty, setSubtaskDifficulty] = useState('medium')
   const [subtasks, setSubtasks] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -54,7 +55,7 @@ function AddTask({ userId, onBack, onDone }) {
   function addSubtaskDraft() {
     const trimmed = subtaskDraft.trim()
     if (!trimmed) return
-    setSubtasks((prev) => [...prev, trimmed])
+    setSubtasks((prev) => [...prev, { name: trimmed, difficulty: subtaskDifficulty }])
     setSubtaskDraft('')
   }
   function removeSubtaskDraft(index) { setSubtasks((prev) => prev.filter((_, i) => i !== index)) }
@@ -91,7 +92,7 @@ function AddTask({ userId, onBack, onDone }) {
     if (insertError) { setError(insertError.message); setSaving(false); return }
 
     if (subtasks.length > 0) {
-      const rows = subtasks.map((subName) => ({ task_id: newTask.id, name: subName, done: false }))
+      const rows = subtasks.map((subtask) => ({ task_id: newTask.id, name: subtask.name, difficulty: subtask.difficulty, done: false }))
       const { error: subError } = await supabase.from('subtasks').insert(rows)
       if (subError) {
         setError('Task created, but subtasks failed to save: ' + subError.message)
@@ -207,12 +208,18 @@ function AddTask({ userId, onBack, onDone }) {
       {subtasks.length > 0 && (
         <div className="subtask-chip-list">
           {subtasks.map((s, i) => (
-            <span className="subtask-chip" key={i}>{s}<button type="button" onClick={() => removeSubtaskDraft(i)} aria-label="Remove"><X size={13} /></button></span>
+            <span className="subtask-chip" key={i}>
+              {s.name} · {s.difficulty}
+              <button type="button" onClick={() => removeSubtaskDraft(i)} aria-label="Remove"><X size={13} /></button>
+            </span>
           ))}
         </div>
       )}
       <div className="add-subtask-row">
         <input className="subtask-input" placeholder="Add a subtask" value={subtaskDraft} onChange={(e) => setSubtaskDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSubtaskDraft())} />
+        <select className="subtask-difficulty-select" value={subtaskDifficulty} onChange={(e) => setSubtaskDifficulty(e.target.value)} aria-label="Subtask difficulty">
+          {DIFFICULTIES.map(({ key }) => <option key={key} value={key}>{key}</option>)}
+        </select>
         <button type="button" className="add-subtask-button" onClick={addSubtaskDraft}>Add</button>
       </div>
       <button className="add-task-button shine" onClick={handleSubmit} disabled={saving}>{saving ? 'Placing block…' : '+ Add Task'}</button>
