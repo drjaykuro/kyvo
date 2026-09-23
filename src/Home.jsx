@@ -8,6 +8,8 @@ import {
   getDailyScore,
   getDailyProgress,
   getTaskProgressPercent,
+  getSubtaskContribution,
+  getTaskMaxScore,
   getDailyQuote,
   goalAchievedMessage,
   getMissingRecurringInstances,
@@ -475,6 +477,9 @@ function Home({ userId, onAddTask }) {
                         {sub.name}
                       </span>
                       <span className={`subtask-difficulty ${sub.difficulty || 'medium'}`}>{sub.difficulty || 'medium'}</span>
+                      <span className="subtask-reward">
+                        +{getSubtaskContribution(task, sub).score} XP · {getSubtaskContribution(task, sub).taskPercent}%
+                      </span>
                     </div>
                   ))}
                   <div className="add-subtask-row">
