@@ -21,91 +21,32 @@ function jitter(id, range) {
   let h = 0
   const s = String(id)
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000
-  return (h % range) - range / 2
-}
-
-function Castle({ userId }) {
-  const [tasks, setTasks] = useState([])
-  const [bestStreak, setBestStreak] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [period, setPeriod] = useState('week')
-
-  useEffect(() => {
-    loadEverything()
-  }, [userId])
-
-  async function loadEverything() {
-    setLoading(true)
-    setError('')
-
-    const [{ data: profile, error: profileError }, { data: taskRows, error: tasksError }] =
-      await Promise.all([
-        supabase.from('users').select('best_streak').eq('id', userId).single(),
-        supabase.from('tasks').select('*, subtasks(*)').eq('user_id', userId),
-      ])
-
-    if (profileError) setError(profileError.message)
-    if (tasksError) setError(tasksError.message)
-
-    const loadedTasks = taskRows || []
-    setTasks(loadedTasks)
-
-    const storedBest = profile?.best_streak ?? 0
-    const currentStreak = getStreak(loadedTasks)
-
-    if (currentStreak > storedBest) {
-      await supabase.from('users').update({ best_streak: currentStreak }).eq('id', userId)
-      setBestStreak(currentStreak)
-    } else {
-      setBestStreak(storedBest)
-    }
-
-    setLoading(false)
-  }
-
-  if (loading) {
-    return <p className="home-loading">Loading your castle…</p>
-  }
-
-  const doneTasks = tasks.filter((t) => t.done)
-  const totalBlocks =
-    doneTasks.length +
-    tasks.reduce((sum, t) => sum + (t.subtasks || []).filter((s) => s.done).length, 0)
-
-  const stats = getPeriodStats(tasks, period)
-
-  const recentlyCompleted = [...doneTasks]
-    .sort((a, b) => {
-      const aKey = `${a.date} ${a.actual_end_time || '00:00'}`
-      const bKey = `${b.date} ${b.actual_end_time || '00:00'}`
-      return bKey.localeCompare(aKey)
-    })
-    .slice(0, 4)
-
-  const wallBricks = [...doneTasks]
-    .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
-    .slice(-80)
-
   return (
     <div className="home-screen">
-      <h1 className="home-greeting">Your Castle 🏰</h1>
-
       {error && <p className="home-error">{error}</p>}
 
-      <div className="stat-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div className="stat-card">
-          <div className="stat-value">{totalBlocks}</div>
-          <div className="stat-label">Total Blocks</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">🔥 {bestStreak}d</div>
-          <div className="stat-label">Best Streak</div>
-        </div>
+      <div className="castle-hero">
+        <div className="castle-icon" aria-hidden="true">🏰</div>
+        <h1 className="castle-title">Your Castle</h1>
+        <div className="castle-total">{totalBlocks}</div>
+        <div className="castle-total-label">BLOCKS BUILT</div>
+      </div>
+
+      <div className="castle-block-counts" aria-label="Blocks built by size">
+        {[
+          ['Small', 'Easy', 'var(--size-small)'],
+          ['Medium', 'Medium', 'var(--size-medium)'],
+          ['Large', 'Hard', 'var(--size-large)'],
+          ['Giant', 'Large', 'var(--size-giant)'],
+        ].map(([size, label, color]) => (
+          <div className="castle-count" key={size}>
+            <span className="castle-count-label" style={{ color }}>{label}</span>
+            <span className="castle-count-number">{blockCounts[size]}</span>
+          </div>
+        ))}
       </div>
 
       <h2 className="section-heading">Your Structure</h2>
-
       <div className="period-tabs">
         {PERIODS.map((p) => (
           <button
@@ -137,8 +78,7 @@ function Castle({ userId }) {
         </div>
       </div>
 
-      <h2 className="section-heading">The Castle</h2>
-
+      <h2 className="section-heading">The Castle Wall</h2>
       {wallBricks.length === 0 ? (
         <p className="empty-text">Complete your first task to start building.</p>
       ) : (
@@ -160,7 +100,6 @@ function Castle({ userId }) {
       )}
 
       <h2 className="section-heading">Recently Completed</h2>
-
       {recentlyCompleted.length === 0 ? (
         <p className="empty-text">Nothing completed yet.</p>
       ) : (
@@ -183,8 +122,8 @@ function Castle({ userId }) {
           </div>
         ))
       )}
-    <div style={{ height: '80px' }} />
-   </div>
+      <div style={{ height: '80px' }} />
+    </div>
   )
 }
 
