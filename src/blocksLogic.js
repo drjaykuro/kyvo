@@ -193,5 +193,37 @@ export function getAllTimeScore(tasks){const uniqueDates=[...new Set(tasks.map(t
 export function getSevenDayStats(tasks){const days=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const dayStr=toDateStr(d),dayTasks=tasks.filter(t=>t.date===dayStr),completed=dayTasks.filter(t=>t.done).length,total=dayTasks.length,plannedHours=+(dayTasks.reduce((s,t)=>s+taskDurationMinutes(t),0)/60).toFixed(1),completedHours=+(dayTasks.filter(t=>t.done).reduce((s,t)=>s+taskDurationMinutes(t),0)/60).toFixed(1);days.push({date:dayStr,completed,total,plannedHours,completedHours})}return days}
 export function getDifficultyBreakdown(tasks){const done=tasks.filter(t=>t.done),counts={easy:0,medium:0,hard:0};done.forEach(t=>{if(counts[t.difficulty]!==undefined)counts[t.difficulty]+=1});const total=done.length,pct={};Object.keys(counts).forEach(k=>{pct[k]=total?Math.round(counts[k]/total*100):0});return{counts,pct,total}}
 export function getCategoryBreakdown(tasks){const done=tasks.filter(t=>t.done),counts={};done.forEach(t=>{counts[t.category]=(counts[t.category]||0)+1});return counts}
-export function getMissingRecurringInstances(tasks){const templates=tasks.filter(t=>t.recurring),toCreate=[];for(const template of templates){const baseFields={user_id:template.user_id,name:template.name,done:false,start_time:template.start_time,end_time:template.end_time,recurring:template.recurring,category:template.category,color:template.color,size:template.size,difficulty:template.difficulty,miss_reason:null,actual_end_time:null};const[y,m,d]=template.date.split('-').map(Number),originalDate=new Date(y,m-1,d),nextDate=new Date(originalDate);if(template.recurring==='daily')nextDate.setDate(nextDate.getDate()+1);else if(template.recurring==='weekly')nextDate.setDate(nextDate.getDate()+7);else continue;const nextDateString=toDateStr(nextDate),alreadyExists=tasks.some(t=>t.name===template.name&&t.date===nextDateString&&t.recurring===template.recurring);if(!alreadyExists)toCreate.push({...baseFields,date:nextDateString})}return toCreate}
+function parseRecurrence(value){if(!value)return null;try{return JSON.parse(value)}catch{return null}}
+function nextCustomDate(template){
+  const rule=parseRecurrence(template.recurring);if(!rule||rule.type!=='custom')return null
+  const [y,m,d]=template.date.split('-').map(Number),current=new Date(y,m-1,d)
+  if(rule.mode==='interval'){const next=new Date(current);next.setDate(next.getDate()+Math.max(1,Number(rule.interval)||1));return next}
+  if(rule.mode==='weekly'){
+    const days=[...(rule.days||[])].map(Number).filter(Number.isInteger)
+    if(!days.length)return null
+    for(let offset=1;offset<=7;offset++){const next=new Date(current);next.setDate(next.getDate()+offset);if(days.includes(next.getDay()))return next}
+  }
+  if(rule.mode==='monthly'){
+    const target=Math.min(31,Math.max(1,Number(rule.day)||current.getDate()))
+    const next=new Date(y,m+1,1)
+    const lastDay=new Date(next.getFullYear(),next.getMonth()+1,0).getDate()
+    next.setDate(Math.min(target,lastDay));return next
+  }
+  return null
+}
+export function getMissingRecurringInstances(tasks){
+  const templates=tasks.filter(t=>t.recurring),toCreate=[]
+  for(const template of templates){
+    const baseFields={user_id:template.user_id,name:template.name,done:false,start_time:template.start_time,end_time:template.end_time,recurring:template.recurring,category:template.category,color:template.color,size:template.size,difficulty:template.difficulty,miss_reason:null,actual_end_time:null,actual_duration_minutes:null}
+    const [y,m,d]=template.date.split('-').map(Number),originalDate=new Date(y,m-1,d),nextDate=new Date(originalDate)
+    if(template.recurring==='daily')nextDate.setDate(nextDate.getDate()+1)
+    else if(template.recurring==='weekly')nextDate.setDate(nextDate.getDate()+7)
+    else if(template.recurring.startsWith('{')){const custom=nextCustomDate(template);if(custom)nextDate.setTime(custom.getTime());else continue}
+    else continue
+    const nextDateString=toDateStr(nextDate)
+    const alreadyExists=tasks.some(t=>t.name===template.name&&t.date===nextDateString&&t.recurring===template.recurring)
+    if(!alreadyExists)toCreate.push({...baseFields,date:nextDateString})
+  }
+  return toCreate
+}
 export function goalAchievedMessage(goal){return goal?.name?`Goal achieved: ${goal.name}`:'Goal achieved!'}
