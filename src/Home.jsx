@@ -6,6 +6,8 @@ import {
   getLevelAndBadge,
   getLevelProgress,
   getDailyScore,
+  getDailyProgress,
+  getTaskProgressPercent,
   getDailyQuote,
   goalAchievedMessage,
   getMissingRecurringInstances,
@@ -34,6 +36,7 @@ function Home({ userId, onAddTask }) {
   const [quote] = useState(() => getDailyQuote())
   const [openSubtasks, setOpenSubtasks] = useState({})
   const [newSubtaskName, setNewSubtaskName] = useState({})
+  const [newSubtaskDifficulty, setNewSubtaskDifficulty] = useState({})
   const [selectedDate, setSelectedDate] = useState(todayStr())
   const [showAddGoal, setShowAddGoal] = useState(false)
   const [goalName, setGoalName] = useState('')
@@ -230,7 +233,7 @@ function Home({ userId, onAddTask }) {
 
     const { data, error: insertError } = await supabase
       .from('subtasks')
-      .insert({ task_id: task.id, name, done: false })
+      .insert({ task_id: task.id, name, difficulty: newSubtaskDifficulty[task.id] || 'medium', done: false })
       .select()
       .single()
 
@@ -242,6 +245,7 @@ function Home({ userId, onAddTask }) {
       prev.map((t) => (t.id === task.id ? { ...t, subtasks: [...(t.subtasks || []), data] } : t))
     )
     setNewSubtaskName((prev) => ({ ...prev, [task.id]: '' }))
+    setNewSubtaskDifficulty((prev) => ({ ...prev, [task.id]: 'medium' }))
   }
 
   async function handleAchieveGoal(goal) {
@@ -306,9 +310,7 @@ function Home({ userId, onAddTask }) {
   const viewedTasks = tasks.filter((t) => t.date === selectedDate)
   const todayTasksForStats = tasks.filter((t) => t.date === today)
   const completedToday = todayTasksForStats.filter((t) => t.done).length
-  const todayPct = todayTasksForStats.length
-    ? Math.round((completedToday / todayTasksForStats.length) * 100)
-    : 0
+  const todayPct = getDailyProgress(tasks, today)
   const blocksToday =
     completedToday +
     todayTasksForStats.reduce((sum, t) => sum + (t.subtasks || []).filter((s) => s.done).length, 0)
@@ -318,12 +320,6 @@ function Home({ userId, onAddTask }) {
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
-  const doneTasks = tasks.filter((t) => t.done)
-  const sizeCounts = { Small: 0, Medium: 0, Large: 0, Giant: 0 }
-  doneTasks.forEach((t) => {
-    if (sizeCounts[t.size] !== undefined) sizeCounts[t.size] += 1
-  })
-  const maxCount = Math.max(1, ...Object.values(sizeCounts))
 
   const dayHeading = isToday
     ? "Today's Tasks"
@@ -404,7 +400,7 @@ function Home({ userId, onAddTask }) {
           const sizeLabel = SIZE_LABEL[task.size] || task.size
           const subtasksDone = (task.subtasks || []).filter((s) => s.done).length
           const subtasksTotal = (task.subtasks || []).length
-          const subtaskPercent = subtasksTotal ? Math.round((subtasksDone / subtasksTotal) * 100) : 0
+          const subtaskPercent = getTaskProgressPercent(task)
           const isOpen = !!openSubtasks[task.id]
           return (
             <div className="task-card" key={task.id}>
@@ -478,6 +474,7 @@ function Home({ userId, onAddTask }) {
                       <span className={sub.done ? 'subtask-name done' : 'subtask-name'}>
                         {sub.name}
                       </span>
+                      <span className={`subtask-difficulty ${sub.difficulty || 'medium'}`}>{sub.difficulty || 'medium'}</span>
                     </div>
                   ))}
                   <div className="add-subtask-row">
@@ -490,6 +487,18 @@ function Home({ userId, onAddTask }) {
                       }
                       onKeyDown={(e) => e.key === 'Enter' && handleAddSubtask(task)}
                     />
+                    <select
+                      className="subtask-difficulty-select"
+                      value={newSubtaskDifficulty[task.id] || 'medium'}
+                      onChange={(e) =>
+                        setNewSubtaskDifficulty((prev) => ({ ...prev, [task.id]: e.target.value }))
+                      }
+                      aria-label="Subtask difficulty"
+                    >
+                      <option value="easy">easy</option>
+                      <option value="medium">medium</option>
+                      <option value="hard">hard</option>
+                    </select>
                     <button className="add-subtask-button" onClick={() => handleAddSubtask(task)}>
                       Add
                     </button>
@@ -574,27 +583,6 @@ function Home({ userId, onAddTask }) {
           <button className="add-task-button shine" onClick={handleAddGoal}>
             Add Goal
           </button>
-        </div>
-      )}
-
-      <h2 className="section-heading">Your Blocks</h2>
-      {doneTasks.length === 0 ? (
-        <p className="empty-text">Complete a task to start seeing your blocks here.</p>
-      ) : (
-        <div className="blocks-chart">
-          {SIZE_ORDER.map((size) => (
-            <div className="blocks-chart-col" key={size}>
-              <span className="blocks-chart-count">{sizeCounts[size]}</span>
-              <div
-                className="blocks-chart-bar block-3d shine"
-                style={{
-                  '--block-color': SIZE_COLOR_VAR[size],
-                  height: `${(sizeCounts[size] / maxCount) * 100}px`,
-                }}
-              />
-              <span className="blocks-chart-label">{SIZE_LABEL[size]}</span>
-            </div>
-          ))}
         </div>
       )}
 
