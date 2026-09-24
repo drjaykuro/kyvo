@@ -23,6 +23,7 @@ function App() {
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
   ))
   const [latestNotification, setLatestNotification] = useState(null)
+  const [pushStatus, setPushStatus] = useState(null)
   const seenNotificationIds = useRef(new Set())
 
   useEffect(() => {
@@ -68,8 +69,10 @@ function App() {
       const result = await registerPushSubscription(supabase, session.user.id)
       if (!result?.ok) {
         console.error('KYVO PUSH REGISTRATION FAILED:', result)
+        setPushStatus(`Push setup failed: ${result.reason || 'unknown error'}`)
       } else {
         console.info('KYVO PUSH REGISTRATION OK')
+        setPushStatus('Push notifications are enabled.')
       }
     }
 
@@ -129,7 +132,13 @@ function App() {
     const permission = await requestNotificationPermission()
     setNotificationPermission(permission)
     if (permission === 'granted' && session?.user?.id) {
-      await registerPushSubscription(supabase, session.user.id)
+      const result = await registerPushSubscription(supabase, session.user.id)
+      if (!result?.ok) {
+        console.error('KYVO PUSH REGISTRATION FAILED:', result)
+        setPushStatus(`Push setup failed: ${result.reason || 'unknown error'}`)
+      } else {
+        setPushStatus('Push notifications are enabled.')
+      }
     }
   }
 
@@ -209,6 +218,34 @@ function App() {
     </div>
   ) : null
 
+  const pushStatusBanner = pushStatus ? (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        left: 16,
+        right: 16,
+        bottom: 140,
+        zIndex: 1001,
+        padding: '10px 14px',
+        borderRadius: 12,
+        background: 'var(--card, #151515)',
+        color: 'var(--text, #fff)',
+        border: '1px solid var(--border, rgba(255,255,255,.12))',
+        fontSize: 13,
+      }}
+    >
+      {pushStatus}
+      <button
+        type="button"
+        onClick={() => setPushStatus(null)}
+        style={{ marginLeft: 8, border: 0, background: 'transparent', color: 'var(--text-dim, #aaa)', cursor: 'pointer' }}
+      >
+        ×
+      </button>
+    </div>
+  ) : null
+
   const reminderBanner = latestNotification ? (
     <div
       role="status"
@@ -238,6 +275,7 @@ function App() {
       <>
         {statusBanner}
         {notificationBanner}
+        {pushStatusBanner}
         {reminderBanner}
         <AddTask
           userId={session.user.id}
@@ -252,6 +290,7 @@ function App() {
     <div style={{ minHeight: '100vh' }}>
       {statusBanner}
       {notificationBanner}
+      {pushStatusBanner}
       {reminderBanner}
       {activeTab === 'home' && (
         <Home userId={session.user.id} onAddTask={() => setShowAddTask(true)} />
