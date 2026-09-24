@@ -347,6 +347,7 @@ class OfflineQuery {
 export const supabase = {
   from: (table) => new OfflineQuery(table),
   auth: cloudSupabase.auth,
+  functions: cloudSupabase.functions,
   sync: syncQueue,
 }
 
