@@ -64,12 +64,18 @@ function App() {
     let cancelled = false
 
     async function setupPush() {
-      if (Notification.permission === 'granted') {
-        await registerPushSubscription(supabase, session.user.id)
+      if (Notification.permission !== 'granted') return
+      const result = await registerPushSubscription(supabase, session.user.id)
+      if (!result?.ok) {
+        console.error('KYVO PUSH REGISTRATION FAILED:', result)
+      } else {
+        console.info('KYVO PUSH REGISTRATION OK')
       }
     }
 
-    setupPush().catch(() => {})
+    setupPush().catch((error) => {
+      console.error('KYVO PUSH SETUP ERROR:', error)
+    })
     return () => {
       cancelled = true
     }
