@@ -561,16 +561,15 @@ function Home({ userId, onAddTask }) {
                 {goal.timeframe?.toUpperCase()}-TERM
               </span>
             </div>
+            <button
+              type="button"
+              className="subtasks-toggle"
+              style={{ width: '100%', marginTop: '10px' }}
+              onClick={() => handleDeleteGoal(goal)}
+            >
+              🗑️ Delete goal
+            </button>
           </div>
-          <button
-            type="button"
-            className="subtasks-toggle"
-            style={{ width: '100%', marginTop: '10px' }}
-            onClick={() => handleDeleteGoal(goal)}
-          >
-            🗑️ Delete goal
-          </button>
-        </div>
         ))
       )}
       {!showAddGoal ? (
