@@ -274,6 +274,27 @@ function Home({ userId, onAddTask }) {
     setGoals((prev) => prev.map((g) => (g.id === goal.id ? { ...g, achieved: true } : g)))
   }
 
+  async function handleDeleteGoal(goal) {
+    const confirmed = window.confirm(
+      `Delete “${goal.name}”? This action cannot be undone.`
+    )
+    if (!confirmed) return
+
+    setError('')
+    const { error: deleteError } = await supabase
+      .from('goals')
+      .delete()
+      .eq('id', goal.id)
+      .eq('user_id', userId)
+
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+
+    setGoals((prev) => prev.filter((g) => g.id !== goal.id))
+  }
+
   async function handleAddGoal() {
     if (!goalName.trim()) {
       setError('Give the goal a name first.')
@@ -541,6 +562,15 @@ function Home({ userId, onAddTask }) {
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            className="subtasks-toggle"
+            style={{ width: '100%', marginTop: '10px' }}
+            onClick={() => handleDeleteGoal(goal)}
+          >
+            🗑️ Delete goal
+          </button>
+        </div>
         ))
       )}
       {!showAddGoal ? (
