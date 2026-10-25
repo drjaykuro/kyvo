@@ -25,7 +25,7 @@ function Signup() {
 
     try {
       const { data: existing, error: checkError } = await supabase
-        .from('users')
+        .from('leaderboard_profiles')
         .select('id')
         .eq('username', username)
         .maybeSingle()
