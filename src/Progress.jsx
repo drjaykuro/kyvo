@@ -87,10 +87,10 @@ function Progress({ userId }) {
     // the stored profile level and the highest completed run in task history
     // so previously earned levels can recover even if an older app version
     // accidentally overwrote the profile level after a missed day.
-    const score = getAllTimeScore(loadedTasks)
-    const storedLevel = Number(profile?.level) || 0
-    const { level } = getLevelAndBadge(loadedTasks, storedLevel)
-    await supabase.from('users').update({ xp_score: score, level }).eq('id', userId)
+    // Recalculate XP and permanent badge level from database records.
+    // The client must not be the authority for these protected values.
+    const { error: progressSyncError } = await supabase.rpc('recalculate_my_progress')
+    if (progressSyncError) setError(progressSyncError.message)
 
     const { data: board, error: boardError } = await supabase
       .from('leaderboard_profiles')
