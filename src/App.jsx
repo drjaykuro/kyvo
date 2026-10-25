@@ -10,6 +10,7 @@ import AddTask from './AddTask'
 import Castle from './Castle'
 import Progress from './Progress'
 import Profile from './Profile'
+import AiCoach from './AiCoach'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -264,10 +265,12 @@ function App() {
       {activeTab === 'blocks' && <Castle userId={session.user.id} />}
       {activeTab === 'progress' && <Progress userId={session.user.id} />}
       {activeTab === 'profile' && <Profile userId={session.user.id} />}
+      {activeTab === 'ai' && <AiCoach />}
       {activeTab !== 'home' &&
         activeTab !== 'blocks' &&
         activeTab !== 'progress' &&
-        activeTab !== 'profile' && (
+        activeTab !== 'profile' &&
+        activeTab !== 'ai' && (
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px', paddingBottom: 100 }}>
           <p style={{ color: 'var(--text-dim)' }}>
             "{activeTab}" screen coming soon.
