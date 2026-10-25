@@ -313,3 +313,28 @@
 @media (prefers-reduced-motion: reduce) {
   .ai-coach-typing span { animation: none; opacity: .7; }
 }
+
+
+.ai-coach-header-actions { display:flex; align-items:center; gap:7px; }
+.ai-coach-reset:disabled { opacity:.45; cursor:wait; }
+.ai-coach-status-dot.connected { background:var(--green); }
+.ai-coach-status-dot.error { background:#ef6b6b; }
+.ai-coach-status-dot.loading { background:#e9b949; }
+.ai-coach-spinning { animation:aiCoachSpin 1s linear infinite; }
+@keyframes aiCoachSpin { to { transform:rotate(360deg); } }
+.ai-coach-data-error { margin-top:12px; padding:11px 13px; border:1px solid rgba(239,107,107,.35); border-radius:12px; background:rgba(239,107,107,.08); color:var(--text); font-size:12px; line-height:1.5; }
+.ai-coach-data-panel { margin-top:14px; padding:14px; border:1px solid var(--card-border); border-radius:16px; background:var(--card); }
+.ai-coach-data-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ai-coach-data-panel-heading > div { display:flex; flex-direction:column; gap:4px; }
+.ai-coach-data-panel-heading strong { font-size:13px; }
+.ai-coach-data-panel-heading span { color:var(--text-dim); font-size:11px; }
+.ai-coach-data-panel-heading button { border:0; background:transparent; color:var(--green); font-size:12px; font-weight:700; cursor:pointer; }
+.ai-coach-data-panel-heading button:disabled { opacity:.5; cursor:wait; }
+.ai-coach-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:13px; }
+.ai-coach-stat-grid > div { display:flex; flex-direction:column; gap:5px; padding:11px; border:1px solid var(--card-border); border-radius:12px; min-width:0; }
+.ai-coach-stat-grid strong { font-size:18px; line-height:1.2; overflow-wrap:anywhere; }
+.ai-coach-stat-grid span { color:var(--text-dim); font-size:11px; }
+.ai-coach-data-detail { margin:11px 0 0; color:var(--text-dim); font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.ai-coach-data-detail b { color:var(--text); }
+@media (min-width:560px) { .ai-coach-stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@media (prefers-reduced-motion:reduce) { .ai-coach-spinning { animation:none; } }
