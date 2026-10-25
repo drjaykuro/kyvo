@@ -93,7 +93,7 @@ function Progress({ userId }) {
     await supabase.from('users').update({ xp_score: score, level }).eq('id', userId)
 
     const { data: board, error: boardError } = await supabase
-      .from('users')
+      .from('leaderboard_profiles')
       .select('id, username, xp_score, level')
       .order('level', { ascending: false })
       .order('xp_score', { ascending: false })

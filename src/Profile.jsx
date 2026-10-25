@@ -82,7 +82,7 @@ function Profile({ userId }) {
     if (tasksError) setError(tasksError.message)
     if (profileRow) { setProfile(profileRow); setBio(profileRow.bio || '') }
     if (taskRows) setTasks(taskRows)
-    const { data: board, error: boardError } = await supabase.from('users').select('id').order('level', { ascending: false }).order('xp_score', { ascending: false }).limit(1000)
+    const { data: board, error: boardError } = await supabase.from('leaderboard_profiles').select('id').order('level', { ascending: false }).order('xp_score', { ascending: false }).limit(1000)
     if (!boardError && board) {
       setLeaderboardSize(board.length)
       const idx = board.findIndex((u) => u.id === userId)
