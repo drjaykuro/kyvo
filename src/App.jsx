@@ -265,7 +265,7 @@ function App() {
       {activeTab === 'blocks' && <Castle userId={session.user.id} />}
       {activeTab === 'progress' && <Progress userId={session.user.id} />}
       {activeTab === 'profile' && <Profile userId={session.user.id} />}
-      {activeTab === 'ai' && <AiCoach />}
+      {activeTab === 'ai' && <AiCoach userId={session.user.id} />}
       {activeTab !== 'home' &&
         activeTab !== 'blocks' &&
         activeTab !== 'progress' &&
