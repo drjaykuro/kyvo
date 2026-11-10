@@ -103,12 +103,11 @@ export async function syncNativeTaskNotifications(tasks) {
   const pending = await LocalNotifications.getPending()
   const managedPending = (pending.notifications || []).filter((notification) => (
     notification?.id &&
-    notification?.extra?.kyvoReminder === REMINDER_PREFIX
+    notification?.data?.kyvoReminder === REMINDER_PREFIX
   ))
 
   const idsToCancel = managedPending
     .map((notification) => notification.id)
-    .filter((id) => !desiredIds.has(id) || desiredIds.has(id))
 
   if (idsToCancel.length > 0) {
     await LocalNotifications.cancel({
