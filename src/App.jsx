@@ -33,6 +33,47 @@ function App() {
   const seenNotificationIds = useRef(new Set())
 
   useEffect(() => {
+    if (!session?.user?.id || !isNativeAndroid()) return undefined
+
+    let cancelled = false
+
+    async function syncNativeReminders() {
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('id, name, date, start_time, done')
+          .eq('user_id', session.user.id)
+
+        if (cancelled) return
+        if (error) {
+          console.error('KYVO NATIVE REMINDER TASK LOAD FAILED:', error)
+          return
+        }
+
+        const result = await syncNativeTaskNotifications(data || [])
+        console.info('KYVO NATIVE REMINDER SYNC:', result)
+      } catch (error) {
+        console.error('KYVO NATIVE REMINDER SYNC FAILED:', error)
+      }
+    }
+
+    syncNativeReminders()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncNativeReminders()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [session?.user?.id, offline])
+
+  useEffect(() => {
     if (!session?.user?.id) return
 
     if (isNativeAndroid()) {
@@ -159,7 +200,8 @@ function App() {
           .eq('user_id', session.user.id)
 
         if (!error) {
-          await syncNativeTaskNotifications(data || [])
+          const result = await syncNativeTaskNotifications(data || [])
+          console.info('KYVO NATIVE REMINDER ENABLE RESULT:', result)
         }
       }
       return
