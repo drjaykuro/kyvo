@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Lock, Check, LogOut, Camera, Sun, Moon } from 'lucide-react'
+import { Lock, Check, LogOut, Camera, Sun, Moon, Bell } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { getStreak, getAllTimeScore, getLevelAndBadge, BADGE_TIERS } from './blocksLogic'
 import './Home.css'
 import './Profile.css'
+import { getNativeNotificationPermissionState, isNativeAndroid, requestNativeNotificationPermission, syncNativeTaskNotifications } from './nativeNotifications'
 
 const storageClient = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -62,9 +63,39 @@ function Profile({ userId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('kyvo-theme') || 'dark')
+  const [alarmPermission, setAlarmPermission] = useState('checking')
+  const [alarmBusy, setAlarmBusy] = useState(false)
+  const [alarmMessage, setAlarmMessage] = useState('')
   const avatarInputRef = useRef(null)
 
   useEffect(() => { loadEverything() }, [userId])
+
+  useEffect(() => {
+    if (!isNativeAndroid()) {
+      setAlarmPermission('unsupported')
+      return undefined
+    }
+
+    let active = true
+    const refreshPermission = async () => {
+      try {
+        const state = await getNativeNotificationPermissionState()
+        if (active) setAlarmPermission(state)
+      } catch {
+        if (active) setAlarmPermission('denied')
+      }
+    }
+
+    refreshPermission()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshPermission()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -116,6 +147,37 @@ function Profile({ userId }) {
       }
     } catch (avatarError) { setError(avatarError.message || 'Could not update your profile picture. Please try again.') }
     finally { setAvatarUploading(false) }
+  }
+
+  async function handleEnableNotificationsAndAlarms() {
+    setAlarmBusy(true)
+    setAlarmMessage('')
+    try {
+      const permission = await requestNativeNotificationPermission()
+      setAlarmPermission(permission)
+
+      if (permission !== 'granted') {
+        setAlarmMessage(permission === 'exact-required'
+          ? 'Allow exact alarms on the Android screen that opened, then return here.'
+          : 'Notification permission is still required. Please allow it and try again.')
+        return
+      }
+
+      const { data, error: taskError } = await supabase
+        .from('tasks')
+        .select('id, name, date, start_time, done')
+        .eq('user_id', userId)
+
+      if (taskError) throw taskError
+
+      const result = await syncNativeTaskNotifications(data || [])
+      if (!result.ok) throw new Error(result.reason || 'Could not schedule reminders.')
+      setAlarmMessage('Notifications and task reminders are enabled.')
+    } catch (permissionError) {
+      setAlarmMessage(permissionError.message || 'Could not enable notifications and alarms.')
+    } finally {
+      setAlarmBusy(false)
+    }
   }
 
   async function handleSaveBio() {
@@ -199,6 +261,28 @@ function Profile({ userId }) {
           const achieved = currentLevel >= lvl
           return <div className={`badge-row${achieved ? ' achieved' : ''}`} key={name}><div className={`badge-icon${achieved ? ' achieved' : ''}`}>{achieved ? <Check size={16} /> : <Lock size={14} />}</div><div className="badge-info"><div className="badge-name">{name}</div><div className="badge-req">{days} day streak</div></div></div>
         })}
+      </div>
+
+      <h2 className="section-heading">Notifications &amp; Alarms</h2>
+      <div className="profile-notification-card">
+        <div className="profile-notification-copy">
+          <div className="profile-notification-icon"><Bell size={18} /></div>
+          <div>
+            <div className="profile-notification-title">Task reminders</div>
+            <div className="profile-notification-description">
+              Get an alert 10 minutes before your scheduled tasks. On Android, exact alarm access may require your approval.
+            </div>
+          </div>
+        </div>
+        <div className={`profile-notification-status ${alarmPermission === 'granted' ? 'enabled' : ''}`}>
+          {alarmPermission === 'granted' ? 'Enabled' : alarmPermission === 'checking' ? 'Checking…' : alarmPermission === 'unsupported' ? 'Available in the Android app' : 'Not fully enabled'}
+        </div>
+        {isNativeAndroid() && (
+          <button className="add-task-button shine" type="button" onClick={handleEnableNotificationsAndAlarms} disabled={alarmBusy}>
+            {alarmBusy ? 'Enabling…' : alarmPermission === 'granted' ? 'Refresh permissions & reminders' : 'Enable Notifications & Alarms'}
+          </button>
+        )}
+        {alarmMessage && <p className="profile-notification-message" role="status">{alarmMessage}</p>}
       </div>
 
       <h2 className="section-heading">About Me</h2>
