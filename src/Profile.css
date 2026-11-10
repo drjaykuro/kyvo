@@ -122,3 +122,49 @@
   gap: 8px;
 }
 .logout-button:hover { border-color: #f87171; background: rgba(239, 68, 68, 0.08); }
+
+
+.profile-notification-card {
+  padding: 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.profile-notification-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+.profile-notification-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--green);
+  background: rgba(143, 255, 114, 0.1);
+}
+.profile-notification-title { font-size: 14px; font-weight: 700; }
+.profile-notification-description {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.profile-notification-status {
+  margin: 12px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+.profile-notification-status.enabled { color: var(--green); }
+.profile-notification-card .add-task-button { width: 100%; }
+.profile-notification-message {
+  margin: 10px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
