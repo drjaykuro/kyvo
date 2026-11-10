@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { requestNotificationPermission, registerPushSubscription, showKyvoNotification } from './notifications'
+import {
+  getNativeNotificationPermissionState,
+  isNativeAndroid,
+  requestNativeNotificationPermission,
+  syncNativeTaskNotifications,
+} from './nativeNotifications'
 import AuthLayout from './AuthLayout'
 import Signup from './Signup'
 import Login from './Login'
@@ -25,6 +31,21 @@ function App() {
   ))
   const [latestNotification, setLatestNotification] = useState(null)
   const seenNotificationIds = useRef(new Set())
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    if (isNativeAndroid()) {
+      getNativeNotificationPermissionState()
+        .then((state) => setNotificationPermission(state === 'prompt' || state === 'prompt-with-rationale' ? 'default' : state))
+        .catch(() => setNotificationPermission('denied'))
+      return
+    }
+
+    setNotificationPermission(
+      typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
+    )
+  }, [session?.user?.id])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -60,7 +81,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!session?.user?.id || offline) return undefined
+    if (!session?.user?.id || offline || isNativeAndroid()) return undefined
 
     let cancelled = false
 
@@ -83,7 +104,7 @@ function App() {
   }, [session?.user?.id, offline])
 
   useEffect(() => {
-    if (!session?.user?.id || offline) return undefined
+    if (!session?.user?.id || offline || isNativeAndroid()) return undefined
 
     let cancelled = false
 
@@ -127,6 +148,23 @@ function App() {
   }, [session?.user?.id, offline])
 
   async function enableNotifications() {
+    if (isNativeAndroid()) {
+      const permission = await requestNativeNotificationPermission()
+      setNotificationPermission(permission)
+
+      if (permission === 'granted' && session?.user?.id) {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('id, name, date, start_time, done')
+          .eq('user_id', session.user.id)
+
+        if (!error) {
+          await syncNativeTaskNotifications(data || [])
+        }
+      }
+      return
+    }
+
     const permission = await requestNotificationPermission()
     setNotificationPermission(permission)
     if (permission === 'granted' && session?.user?.id) {
@@ -181,7 +219,7 @@ function App() {
     </div>
   ) : null
 
-  const notificationBanner = notificationPermission === 'default' ? (
+  const notificationBanner = (notificationPermission === 'default' || notificationPermission === 'exact-required') ? (
     <div
       style={{
         position: 'fixed',
@@ -197,7 +235,11 @@ function App() {
         borderBottom: '1px solid var(--border, rgba(255,255,255,.12))',
       }}
     >
-      KYVO can remind you about upcoming blocks.{' '}
+      {isNativeAndroid()
+        ? (notificationPermission === 'exact-required'
+          ? 'KYVO needs exact alarms to remind you 10 minutes before a block. '
+          : 'KYVO can remind you 10 minutes before your blocks. ')
+        : 'KYVO can remind you about upcoming blocks. '}
       <button
         type="button"
         onClick={enableNotifications}
@@ -210,7 +252,7 @@ function App() {
           padding: 0,
         }}
       >
-        Enable notifications
+        {isNativeAndroid() && notificationPermission === 'exact-required' ? 'Enable exact reminders' : 'Enable notifications'}
       </button>
     </div>
   ) : null
