@@ -19,6 +19,7 @@ import {
   toDateStr,
 } from './blocksLogic'
 import './Home.css'
+import { syncNativeTaskNotifications } from './nativeNotifications'
 
 const SIZE_COLOR_VAR = {
   Small: 'var(--size-small)',
@@ -78,6 +79,7 @@ function Home({ userId, onAddTask }) {
     setTasks(loadedTasks)
     if (goalRows) setGoals(goalRows)
     setLoading(false)
+    syncNativeTaskNotifications(loadedTasks).catch(() => {})
 
     // Recurring instances are useful background maintenance, but they should
     // never delay the first Home render.
@@ -88,7 +90,9 @@ function Home({ userId, onAddTask }) {
         .select('*, subtasks(*)')
         .then(({ data: inserted, error: recurError }) => {
           if (!recurError && inserted) {
-            setTasks((current) => [...current, ...inserted])
+            const nextTasks = [...loadedTasks, ...inserted]
+            setTasks(nextTasks)
+            syncNativeTaskNotifications(nextTasks).catch(() => {})
           }
         })
         .catch(() => {})
@@ -150,7 +154,9 @@ function Home({ userId, onAddTask }) {
       return
     }
 
-    setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? data : t)))
+    const nextTasks = tasks.map((t) => (t.id === editingTask.id ? data : t))
+    setTasks(nextTasks)
+    syncNativeTaskNotifications(nextTasks).catch(() => {})
     setEditingTask(null)
     setSavingEdit(false)
   }
@@ -171,7 +177,9 @@ function Home({ userId, onAddTask }) {
       return
     }
 
-    setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    const nextTasks = tasks.filter((t) => t.id !== task.id)
+    setTasks(nextTasks)
+    syncNativeTaskNotifications(nextTasks).catch(() => {})
     setOpenSubtasks((prev) => {
       const next = { ...prev }
       delete next[task.id]
@@ -186,8 +194,10 @@ function Home({ userId, onAddTask }) {
         .update({ done: false, actual_end_time: null, actual_duration_minutes: null })
         .eq('id', task.id).eq('user_id', userId)
       if (undoError) { setError(undoError.message); return }
-      setTasks((prev) => prev.map((t) => t.id === task.id
-        ? { ...t, done: false, actual_end_time: null, actual_duration_minutes: null } : t))
+      const nextTasks = tasks.map((t) => t.id === task.id
+        ? { ...t, done: false, actual_end_time: null, actual_duration_minutes: null } : t)
+      setTasks(nextTasks)
+      syncNativeTaskNotifications(nextTasks).catch(() => {})
       return
     }
     const allowedFrom = earliestCompletionTime(task)
@@ -207,8 +217,10 @@ function Home({ userId, onAddTask }) {
       .update({ done: true, actual_end_time: actualEndTime, actual_duration_minutes: Math.round(actualDuration) })
       .eq('id', task.id).eq('user_id', userId)
     if (updateError) { setError(updateError.message); return }
-    setTasks((prev) => prev.map((t) => t.id === task.id
-      ? { ...t, done: true, actual_end_time: actualEndTime, actual_duration_minutes: Math.round(actualDuration) } : t))
+    const nextTasks = tasks.map((t) => t.id === task.id
+      ? { ...t, done: true, actual_end_time: actualEndTime, actual_duration_minutes: Math.round(actualDuration) } : t)
+    setTasks(nextTasks)
+    syncNativeTaskNotifications(nextTasks).catch(() => {})
   }
 
   async function handleMarkSubtaskDone(task, subtask) {
