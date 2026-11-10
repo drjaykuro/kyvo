@@ -99,7 +99,13 @@ export async function syncNativeTaskNotifications(tasks) {
   }
 
   const eligibleTasks = getEligibleTasks(tasks)
-  const desiredIds = new Set(eligibleTasks.map((task) => notificationId(task.id)))
+  await LocalNotifications.createChannel({
+    id: 'kyvo-reminders',
+    name: 'KYVO Reminders',
+    description: 'Task start reminders from KYVO',
+    importance: 4,
+  })
+
   const pending = await LocalNotifications.getPending()
   const managedPending = (pending.notifications || []).filter((notification) => (
     notification?.id &&
@@ -119,7 +125,10 @@ export async function syncNativeTaskNotifications(tasks) {
     return { ok: true, scheduled: 0 }
   }
 
-  const result = await LocalNotifications.schedule({
+  let result
+
+  try {
+    result = await LocalNotifications.schedule({
     notifications: eligibleTasks.map((task) => ({
       id: notificationId(task.id),
       title: 'KYVO Reminder',
@@ -128,6 +137,7 @@ export async function syncNativeTaskNotifications(tasks) {
         at: getReminderDate(task),
         allowWhileIdle: true,
       },
+      channelId: 'kyvo-reminders',
       data: {
         kyvoReminder: REMINDER_PREFIX,
         taskId: task.id,
@@ -137,9 +147,21 @@ export async function syncNativeTaskNotifications(tasks) {
         taskId: task.id,
       },
       isExactNotification: true,
+      isExactMandatory: true,
       foreground: true,
     })),
   })
+  } catch (error) {
+    console.error('KYVO NATIVE REMINDER SCHEDULE FAILED:', error)
+    return {
+      ok: false,
+      reason: 'schedule-error',
+      error: error?.message || String(error),
+      code: error?.code || null,
+    }
+  }
+
+  console.info('KYVO NATIVE REMINDERS SCHEDULED:', result)
 
   return {
     ok: true,
